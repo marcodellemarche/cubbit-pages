@@ -2,24 +2,33 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root {
   --primary: #009EFF;
-  --primary-dark: #0080CC;
+  --primary-dark: #0065FF;
   --primary-glow: rgba(0, 158, 255, 0.15);
-  --bg: #0a0e17;
+  --orange: #FF6B35;
+  --orange-glow: rgba(255, 107, 53, 0.05);
+  --bg: #0A0E1A;
   --surface: #111827;
-  --surface-light: #1f2937;
-  --border: rgba(255,255,255,0.08);
-  --text: #f3f4f6;
-  --text-muted: #9ca3af;
-  --radius: 12px;
+  --surface-2: #1A2235;
+  --border: #1E2D45;
+  --border-2: #2A3F5F;
+  --text: #E8EDF5;
+  --text-muted: #8B9ABB;
+  --success: #22C55E;
+  --error: #EF4444;
+  --radius: 20px;
+  --radius-sm: 8px;
   --max-w: 1100px;
 }
 html{scroll-behavior:smooth}
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
 /* ── Hex background ─────────────────────────────────── */
@@ -27,8 +36,32 @@ body {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='52'%3E%3Cpath d='M30 0L60 17.3v17.4L30 52 0 34.7V17.3z' fill='none' stroke='%23009EFF' stroke-opacity='0.05' stroke-width='1'/%3E%3C/svg%3E") repeat;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='52'%3E%3Cpath d='M30 0L60 17.3v17.4L30 52 0 34.7V17.3z' fill='none' stroke='%23009EFF' stroke-opacity='0.06' stroke-width='1'/%3E%3C/svg%3E") repeat;
   pointer-events: none;
+}
+.glow-blue {
+  position: fixed;
+  top: -10rem;
+  left: -10rem;
+  width: 24rem;
+  height: 24rem;
+  border-radius: 50%;
+  background: rgba(0, 158, 255, 0.05);
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+}
+.glow-orange {
+  position: fixed;
+  bottom: -10rem;
+  right: -10rem;
+  width: 24rem;
+  height: 24rem;
+  border-radius: 50%;
+  background: var(--orange-glow);
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* ── Layout ──────────────────────────────────────────── */
@@ -57,7 +90,8 @@ nav {
 .nav-links a {
   color: var(--text-muted);
   text-decoration: none;
-  font-size: .9rem;
+  font-size: .85rem;
+  font-weight: 500;
   transition: color .2s;
 }
 .nav-links a:hover { color: var(--primary); }
@@ -77,11 +111,12 @@ nav {
 .accent { color: var(--primary); }
 .subtitle {
   margin-top: 1.25rem;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: var(--text-muted);
   max-width: 600px;
   margin-left: auto;
   margin-right: auto;
+  line-height: 1.7;
 }
 .hero-actions {
   display: flex;
@@ -92,9 +127,9 @@ nav {
 .btn {
   display: inline-flex;
   align-items: center;
-  padding: .8rem 1.75rem;
-  border-radius: 8px;
-  font-size: .95rem;
+  padding: .75rem 1.75rem;
+  border-radius: var(--radius-sm);
+  font-size: .9rem;
   font-weight: 600;
   text-decoration: none;
   transition: all .2s;
@@ -119,24 +154,26 @@ nav {
   display: inline-block;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 1rem 1.75rem;
 }
 .hero-code pre { margin: 0; }
 .hero-code code {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: .9rem;
+  font-size: .85rem;
   color: var(--primary);
 }
 .dim { color: var(--text-muted); }
 
-/* ── Features ────────────────────────────────────────── */
-.features h2, .install h2, .download h2, .quickstart h2 {
-  font-size: 2rem;
+/* ── Section headings ────────────────────────────────── */
+.features h2, .install h2, .download h2, .quickstart h2, .action-section h2 {
+  font-size: 1.75rem;
   text-align: center;
   margin-bottom: 3rem;
   letter-spacing: -.02em;
+  font-weight: 700;
 }
+
+/* ── Features ────────────────────────────────────────── */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -150,7 +187,7 @@ nav {
   transition: border-color .2s, box-shadow .2s;
 }
 .card:hover {
-  border-color: rgba(0,158,255,.25);
+  border-color: var(--border-2);
   box-shadow: 0 0 30px var(--primary-glow);
 }
 .card-icon {
@@ -158,13 +195,37 @@ nav {
   margin-bottom: 1rem;
 }
 .card h3 {
-  font-size: 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
   margin-bottom: .5rem;
 }
 .card p {
   color: var(--text-muted);
+  font-size: .85rem;
+  line-height: 1.7;
+}
+
+/* ── GitHub Action ───────────────────────────────────── */
+.action-section {
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+}
+.action-box {
+  max-width: 750px;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem;
+}
+.action-box p {
+  color: var(--text-muted);
   font-size: .9rem;
-  line-height: 1.6;
+  line-height: 1.7;
+  margin-bottom: 1.25rem;
+}
+.action-box .code-block {
+  margin-top: 1.25rem;
 }
 
 /* ── Install ─────────────────────────────────────────── */
@@ -174,22 +235,24 @@ nav {
   gap: 1.5rem;
 }
 .install-method h3 {
-  font-size: 1rem;
+  font-size: .85rem;
+  font-weight: 600;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
   margin-bottom: .75rem;
 }
 .code-block {
   position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 1rem 1.25rem;
   overflow-x: auto;
 }
 .code-block pre { margin: 0; }
 .code-block code {
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: .85rem;
+  font-size: .8rem;
   color: var(--text);
   white-space: pre;
 }
@@ -197,16 +260,16 @@ nav {
   position: absolute;
   top: .75rem;
   right: .75rem;
-  background: var(--surface-light);
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 6px;
   cursor: pointer;
   color: var(--text-muted);
   line-height: 0;
   transition: color .2s, border-color .2s;
 }
-.copy-btn:hover { color: var(--primary); border-color: rgba(0,158,255,.3); }
+.copy-btn:hover { color: var(--primary); border-color: rgba(0,158,255,.4); }
 
 /* ── Download ────────────────────────────────────────── */
 .download-desc {
@@ -214,6 +277,7 @@ nav {
   color: var(--text-muted);
   margin-top: -2rem;
   margin-bottom: 2rem;
+  font-size: .9rem;
 }
 .download-grid {
   display: grid;
@@ -235,11 +299,11 @@ nav {
   transition: border-color .2s, box-shadow .2s;
 }
 .download-card:hover {
-  border-color: rgba(0,158,255,.4);
+  border-color: var(--border-2);
   box-shadow: 0 0 20px var(--primary-glow);
 }
 .dl-icon { color: var(--primary); flex-shrink: 0; }
-.dl-info strong { display: block; font-size: 1rem; }
+.dl-info strong { display: block; font-size: .95rem; font-weight: 600; }
 .dl-info span { font-size: .8rem; color: var(--text-muted); }
 
 /* ── Quick start ─────────────────────────────────────── */
@@ -266,6 +330,7 @@ nav {
 .step-content { flex: 1; }
 .step-content h3 {
   font-size: 1rem;
+  font-weight: 600;
   margin-bottom: .75rem;
 }
 .step-content .code-block { margin: 0; }
@@ -277,7 +342,7 @@ footer {
   text-align: center;
 }
 .footer-inner { max-width: var(--max-w); margin: 0 auto; }
-footer p { color: var(--text-muted); font-size: .85rem; }
+footer p { color: var(--text-muted); font-size: .8rem; }
 footer a { color: var(--primary); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
 .footer-links { margin-top: .5rem; display: flex; gap: 1.5rem; justify-content: center; }
@@ -289,4 +354,5 @@ footer a:hover { text-decoration: underline; }
   .install-methods { grid-template-columns: 1fr; }
   .download-grid { grid-template-columns: 1fr; }
   section { padding: 3rem 1rem; }
+  .action-box { padding: 1.5rem; }
 }

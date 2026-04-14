@@ -1,15 +1,21 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cubbit Pages — Deploy static sites to Cubbit S3</title>
 <meta name="description" content="CLI tool to deploy static sites to Cubbit S3 with optional AES-256-GCM client-side encryption. Zero backend, zero server.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="hex-bg"></div>
+<div class="glow-blue"></div>
+<div class="glow-orange"></div>
 
 <header>
   <nav>
@@ -23,8 +29,9 @@
     </div>
     <div class="nav-links">
       <a href="#features">Features</a>
-      <a href="#install">Installa</a>
+      <a href="#install">Install</a>
       <a href="#download">Download</a>
+      <a href="#action">GitHub Action</a>
       <a href="https://github.com/marcodellemarche/cubbit-pages" target="_blank" rel="noopener">GitHub</a>
     </div>
   </nav>
@@ -36,15 +43,15 @@
   <section class="hero">
     <h1>Deploy static sites<br>to <span class="accent">Cubbit S3</span></h1>
     <p class="subtitle">
-      CLI Go per pubblicare siti statici su Cubbit con cifratura opzionale AES-256-GCM.
-      <br>Zero backend. Zero server. Zero dipendenze.
+      A Go CLI to publish static sites on Cubbit with optional AES-256-GCM
+      client-side encryption. Zero backend. Zero server. Zero dependencies.
     </p>
     <div class="hero-actions">
-      <a href="#install" class="btn btn-primary">Installa ora</a>
-      <a href="#download" class="btn btn-outline">Download binari</a>
+      <a href="#install" class="btn btn-primary">Install now</a>
+      <a href="#download" class="btn btn-outline">Download binaries</a>
     </div>
     <div class="hero-code">
-      <pre><code><span class="dim">$</span> cubbit-pages deploy ./mio-sito --bucket mio-bucket --encrypt</code></pre>
+      <pre><code><span class="dim">$</span> cubbit-pages deploy ./my-site --bucket my-bucket --encrypt</code></pre>
     </div>
   </section>
 
@@ -56,64 +63,92 @@
         <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M4 17l6-6 4 4 6-8"/><rect x="2" y="2" width="20" height="20" rx="3"/></svg>
         </div>
-        <h3>Deploy in un comando</h3>
-        <p>Punta a una cartella, specifica il bucket. Cubbit Pages carica tutto con i MIME type corretti.</p>
+        <h3>One-command deploy</h3>
+        <p>Point to a folder, specify a bucket. Cubbit Pages uploads everything with the correct MIME types and public ACL.</p>
       </div>
       <div class="card">
         <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16.5" r="1.5"/></svg>
         </div>
-        <h3>Cifratura AES-256-GCM</h3>
-        <p>Ogni file cifrato lato client. Pagina di login generata automaticamente. Decifratura nel browser via Web Crypto API.</p>
+        <h3>AES-256-GCM encryption</h3>
+        <p>Every file encrypted client-side. Auto-generated login page. In-browser decryption via Web Crypto API. Password stays in localStorage.</p>
       </div>
       <div class="card">
         <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         </div>
-        <h3>Upload paralleli</h3>
-        <p>Upload concorrenti configurabili. ACL per-file o bucket policy. Dry-run per verificare prima.</p>
+        <h3>Parallel uploads</h3>
+        <p>Configurable concurrency. Per-file ACL or bucket policy. Dry-run mode to verify before deploying.</p>
       </div>
       <div class="card">
         <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M2 12h20M12 2a15 15 0 014 10 15 15 0 01-4 10 15 15 0 01-4-10A15 15 0 0112 2z"/></svg>
         </div>
         <h3>Cross-platform</h3>
-        <p>Binario Go standalone. Linux, macOS, Windows. AMD64 e ARM64. Zero dipendenze runtime.</p>
+        <p>Standalone Go binary. Linux, macOS, Windows. AMD64 and ARM64. Zero runtime dependencies.</p>
       </div>
       <div class="card">
         <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94L6.7 20.2a2.12 2.12 0 01-3-3l6.73-6.73a6 6 0 017.94-7.94L14.7 6.3z"/></svg>
         </div>
-        <h3>Snippet pronti</h3>
-        <p>Genera automaticamente bucket policy, CORS, IAM policy e lifecycle con un comando.</p>
+        <h3>Ready-made snippets</h3>
+        <p>Auto-generates bucket policy, CORS, IAM policy and lifecycle commands with a single command.</p>
       </div>
       <div class="card">
         <div class="card-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
         </div>
-        <h3>Open Source</h3>
-        <p>Codice su GitHub. CI/CD con GitHub Actions. Progetto companion di Cubbit Seal.</p>
+        <h3>Open source</h3>
+        <p>Code on GitHub. CI/CD with GitHub Actions. Reusable action for your own workflows. Companion project to Cubbit Seal.</p>
       </div>
+    </div>
+  </section>
+
+  <!-- GitHub Action -->
+  <section id="action" class="action-section">
+    <h2>GitHub Action</h2>
+    <div class="action-box">
+      <p>
+        Cubbit Pages ships as a <strong>reusable GitHub Action</strong> you can drop into any workflow.
+        Deploy your static site to Cubbit S3 in a single step &mdash; no setup, no install, no scripts.
+      </p>
+      <div class="code-block">
+        <button class="copy-btn" data-target="action-snippet" aria-label="Copy">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        </button>
+        <pre><code id="action-snippet">- uses: marcodellemarche/cubbit-pages@main
+  with:
+    source-dir: ./dist
+    bucket: my-bucket
+    access-key: ${{ secrets.CUBBIT_ACCESS_KEY }}
+    secret-key: ${{ secrets.CUBBIT_SECRET_KEY }}</code></pre>
+      </div>
+      <p style="margin-top:1.25rem">
+        Supports all CLI flags: <code>encrypt</code>, <code>password</code>,
+        <code>public-bucket</code>, <code>prefix</code>, <code>concurrency</code>,
+        and <code>version</code> pinning. See the
+        <a href="https://github.com/marcodellemarche/cubbit-pages" style="color:var(--primary)">README</a> for full reference.
+      </p>
     </div>
   </section>
 
   <!-- Install -->
   <section id="install" class="install">
-    <h2>Installazione</h2>
+    <h2>Installation</h2>
     <div class="install-methods">
       <div class="install-method">
-        <h3>Script automatico</h3>
+        <h3>Automatic script</h3>
         <div class="code-block">
-          <button class="copy-btn" data-target="install-script" aria-label="Copia">
+          <button class="copy-btn" data-target="install-script" aria-label="Copy">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           </button>
           <pre><code id="install-script">curl -sSL https://s3.cubbit.eu/cubbit-pages-releases/install.sh | bash</code></pre>
         </div>
       </div>
       <div class="install-method">
-        <h3>Build da sorgente</h3>
+        <h3>Build from source</h3>
         <div class="code-block">
-          <button class="copy-btn" data-target="install-source" aria-label="Copia">
+          <button class="copy-btn" data-target="install-source" aria-label="Copy">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           </button>
           <pre><code id="install-source">git clone https://github.com/marcodellemarche/cubbit-pages.git
@@ -126,8 +161,8 @@ make build</code></pre>
 
   <!-- Download -->
   <section id="download" class="download">
-    <h2>Download binari</h2>
-    <p class="download-desc">Scarica il binario precompilato per la tua piattaforma.</p>
+    <h2>Download binaries</h2>
+    <p class="download-desc">Download the precompiled binary for your platform.</p>
     <div class="download-grid">
       <a href="https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/cubbit-pages-linux-amd64" class="download-card">
         <div class="dl-icon">
@@ -184,35 +219,34 @@ make build</code></pre>
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-content">
-          <h3>Configura il bucket</h3>
+          <h3>Configure your bucket</h3>
           <div class="code-block">
-            <pre><code>cubbit-pages snippets --bucket mio-bucket</code></pre>
+            <pre><code>cubbit-pages snippets --bucket my-bucket</code></pre>
           </div>
         </div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-content">
-          <h3>Deploy in chiaro</h3>
+          <h3>Deploy in the clear</h3>
           <div class="code-block">
-            <pre><code>cubbit-pages deploy ./mio-sito \
-  --bucket mio-bucket \
+            <pre><code>cubbit-pages deploy ./my-site \
+  --bucket my-bucket \
   --access-key $CUBBIT_ACCESS_KEY \
-  --secret-key $CUBBIT_SECRET_KEY \
-  --public-bucket</code></pre>
+  --secret-key $CUBBIT_SECRET_KEY</code></pre>
           </div>
         </div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-content">
-          <h3>Oppure deploy cifrato</h3>
+          <h3>Or deploy encrypted</h3>
           <div class="code-block">
-            <pre><code>cubbit-pages deploy ./mio-sito \
-  --bucket mio-bucket \
+            <pre><code>cubbit-pages deploy ./my-site \
+  --bucket my-bucket \
   --access-key $CUBBIT_ACCESS_KEY \
   --secret-key $CUBBIT_SECRET_KEY \
-  --encrypt --password "la-mia-password"</code></pre>
+  --encrypt --password "my-secret-password"</code></pre>
           </div>
         </div>
       </div>
