@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accedi — Cubbit Pages</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#009EFF;--primary-dark:#0080CC;--bg:#0a0e17;--surface:#111827;--surface-light:#1f2937;--text:#f3f4f6;--text-muted:#9ca3af;--error:#ef4444;--success:#22c55e;--radius:12px}
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;position:relative;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='52'%3E%3Cpath d='M30 0L60 17.3v17.4L30 52 0 34.7V17.3z' fill='none' stroke='%23009EFF' stroke-opacity='0.06' stroke-width='1'/%3E%3C/svg%3E") repeat;z-index:0}
+.container{position:relative;z-index:1;width:100%;max-width:420px;padding:1.5rem}
+.card{background:var(--surface);border:1px solid rgba(0,158,255,.15);border-radius:var(--radius);padding:2.5rem;box-shadow:0 0 60px rgba(0,158,255,.08)}
+.logo{text-align:center;margin-bottom:2rem}
+.logo svg{width:48px;height:48px}
+.logo h1{font-size:1.25rem;font-weight:600;margin-top:.75rem;letter-spacing:-.02em}
+.logo h1 span{color:var(--primary)}
+.logo p{font-size:.8rem;color:var(--text-muted);margin-top:.25rem}
+.field{margin-bottom:1.25rem}
+.field label{display:block;font-size:.8rem;font-weight:500;color:var(--text-muted);margin-bottom:.5rem}
+.input-wrap{position:relative}
+.input-wrap input{width:100%;padding:.75rem 3rem .75rem 1rem;background:var(--surface-light);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text);font-size:.95rem;outline:none;transition:border-color .2s}
+.input-wrap input:focus{border-color:var(--primary)}
+.toggle-pw{position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px;line-height:0}
+.toggle-pw:hover{color:var(--text)}
+.btn{width:100%;padding:.85rem;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:.95rem;font-weight:600;cursor:pointer;transition:background .2s}
+.btn:hover{background:var(--primary-dark)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.error{display:none;margin-top:1rem;padding:.75rem 1rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:var(--error);font-size:.85rem;text-align:center}
+.error.show{display:block}
+.spinner{display:none;margin:1rem auto 0;width:24px;height:24px;border:3px solid rgba(0,158,255,.2);border-top-color:var(--primary);border-radius:50%;animation:spin .6s linear infinite}
+.spinner.show{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.footer{text-align:center;margin-top:1.5rem;font-size:.7rem;color:var(--text-muted)}
+.footer a{color:var(--primary);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="container">
+ <div class="card">
+  <div class="logo">
+   <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M24 4L44 15.5V36.5L24 48L4 36.5V15.5L24 4Z" stroke="#009EFF" stroke-width="2" fill="rgba(0,158,255,0.1)"/>
+    <path d="M24 14L36 21V35L24 42L12 35V21L24 14Z" stroke="#009EFF" stroke-width="1.5" fill="rgba(0,158,255,0.05)"/>
+    <rect x="18" y="22" width="12" height="10" rx="2" stroke="#009EFF" stroke-width="1.5"/>
+    <path d="M20 22V19a4 4 0 018 0v3" stroke="#009EFF" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="24" cy="27.5" r="1.5" fill="#009EFF"/>
+   </svg>
+   <h1>Cubbit <span>Pages</span></h1>
+   <p>Sito protetto — inserisci la password</p>
+  </div>
+  <form id="login-form">
+   <div class="field">
+    <label for="password">Password</label>
+    <div class="input-wrap">
+     <input type="password" id="password" autocomplete="current-password" placeholder="Inserisci la password" required>
+     <button type="button" class="toggle-pw" aria-label="Mostra password">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+     </button>
+    </div>
+   </div>
+   <button type="submit" class="btn" id="submit-btn">Accedi</button>
+  </form>
+  <div class="error" id="error-msg">Password non corretta</div>
+  <div class="spinner" id="spinner"></div>
+ </div>
+ <div class="footer">Protetto con <a href="https://cubbit.io" target="_blank" rel="noopener">Cubbit</a> Pages</div>
+</div>
+<script>
+(function(){
+  'use strict';
+  var MAGIC=[0x43,0x50,0x47,0x53];
+  var VERSION=1;
+  var SALT_LEN=16;
+  var NONCE_LEN=12;
+  var HEADER_LEN=4+1+SALT_LEN+NONCE_LEN;
+  var ITERATIONS=100000;
+  var STORAGE_KEY='cubbitseal_password';
+  var VERIFY_FILE='_verify.enc';
+
+  // Check if already authenticated
+  var savedPwd=localStorage.getItem(STORAGE_KEY);
+  if(savedPwd){
+    redirectToTarget();
+    return;
+  }
+
+  var form=document.getElementById('login-form');
+  var pwdInput=document.getElementById('password');
+  var errorMsg=document.getElementById('error-msg');
+  var spinner=document.getElementById('spinner');
+  var submitBtn=document.getElementById('submit-btn');
+  var togglePw=document.querySelector('.toggle-pw');
+
+  togglePw.addEventListener('click',function(){
+    var t=pwdInput.type==='password'?'text':'password';
+    pwdInput.setAttribute('type',t);
+  });
+
+  form.addEventListener('submit',function(e){
+    e.preventDefault();
+    var pwd=pwdInput.value;
+    if(!pwd)return;
+    errorMsg.classList.remove('show');
+    spinner.classList.add('show');
+    submitBtn.disabled=true;
+    verifyPassword(pwd).then(function(ok){
+      spinner.classList.remove('show');
+      if(ok){
+        localStorage.setItem(STORAGE_KEY,pwd);
+        redirectToTarget();
+      }else{
+        errorMsg.classList.add('show');
+        submitBtn.disabled=false;
+        pwdInput.focus();
+      }
+    }).catch(function(){
+      spinner.classList.remove('show');
+      errorMsg.textContent='Errore di rete — riprova';
+      errorMsg.classList.add('show');
+      submitBtn.disabled=false;
+    });
+  });
+
+  function redirectToTarget(){
+    var params=new URLSearchParams(window.location.search);
+    var target=params.get('r')||'index.html';
+    if(target==='index.html'){
+      // Load the encrypted original index
+      loadEncryptedPage('index.html.enc');
+    }else{
+      loadEncryptedPage(target+'.enc');
+    }
+  }
+
+  function loadEncryptedPage(encUrl){
+    var pwd=localStorage.getItem(STORAGE_KEY);
+    if(!pwd){window.location.href='/';return;}
+    fetch(encUrl).then(function(r){
+      if(!r.ok)throw new Error('fetch failed');
+      return r.arrayBuffer();
+    }).then(function(buf){
+      return decryptData(new Uint8Array(buf),pwd);
+    }).then(function(plain){
+      var html=new TextDecoder().decode(plain);
+      document.open();
+      document.write(html);
+      document.close();
+    }).catch(function(){
+      localStorage.removeItem(STORAGE_KEY);
+      window.location.reload();
+    });
+  }
+
+  function verifyPassword(pwd){
+    return fetch(VERIFY_FILE).then(function(r){
+      if(!r.ok)throw new Error('fetch failed');
+      return r.arrayBuffer();
+    }).then(function(buf){
+      return decryptData(new Uint8Array(buf),pwd).then(function(plain){
+        return new TextDecoder().decode(plain)==='cubbit-pages-ok';
+      });
+    }).catch(function(){
+      return false;
+    });
+  }
+
+  function decryptData(data,password){
+    if(data.length<HEADER_LEN)return Promise.reject('too short');
+    for(var i=0;i<4;i++){if(data[i]!==MAGIC[i])return Promise.reject('bad magic');}
+    if(data[4]!==VERSION)return Promise.reject('bad version');
+    var off=5;
+    var salt=data.slice(off,off+SALT_LEN);off+=SALT_LEN;
+    var nonce=data.slice(off,off+NONCE_LEN);off+=NONCE_LEN;
+    var ct=data.slice(off);
+    return deriveKey(password,salt).then(function(key){
+      return crypto.subtle.decrypt({name:'AES-GCM',iv:nonce,tagLength:128},key,ct);
+    });
+  }
+
+  function deriveKey(password,salt){
+    var enc=new TextEncoder();
+    return crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']).then(function(km){
+      return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:ITERATIONS,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+    });
+  }
+})();
+</script>
+</body>
+</html>

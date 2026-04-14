@@ -1,0 +1,5 @@
+bin/
+coverage.out
+coverage.html
+*.exe
+.DS_Store

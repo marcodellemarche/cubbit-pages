@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Caricamento...</title>
+<style>body{background:#0a0e17;color:#f3f4f6;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif}.s{width:24px;height:24px;border:3px solid rgba(0,158,255,.2);border-top-color:#009EFF;border-radius:50%;animation:r .6s linear infinite}@keyframes r{to{transform:rotate(360deg)}}</style>
+</head>
+<body>
+<div class="s"></div>
+<script>
+(function(){
+  'use strict';
+  var MAGIC=[0x43,0x50,0x47,0x53];
+  var VERSION=1;
+  var SALT_LEN=16;
+  var NONCE_LEN=12;
+  var HEADER_LEN=4+1+SALT_LEN+NONCE_LEN;
+  var ITERATIONS=100000;
+  var STORAGE_KEY='cubbitseal_password';
+
+  var pwd=localStorage.getItem(STORAGE_KEY);
+  if(!pwd){window.location.href='index.html';return;}
+
+  var encUrl='{{ENC_URL}}';
+  fetch(encUrl).then(function(r){
+    if(!r.ok)throw new Error('fetch failed');
+    return r.arrayBuffer();
+  }).then(function(buf){
+    return decryptData(new Uint8Array(buf),pwd);
+  }).then(function(plain){
+    var html=new TextDecoder().decode(plain);
+    document.open();
+    document.write(html);
+    document.close();
+  }).catch(function(){
+    localStorage.removeItem(STORAGE_KEY);
+    window.location.href='index.html';
+  });
+
+  function decryptData(data,password){
+    if(data.length<HEADER_LEN)return Promise.reject('too short');
+    for(var i=0;i<4;i++){if(data[i]!==MAGIC[i])return Promise.reject('bad magic');}
+    if(data[4]!==VERSION)return Promise.reject('bad version');
+    var off=5;
+    var salt=data.slice(off,off+SALT_LEN);off+=SALT_LEN;
+    var nonce=data.slice(off,off+NONCE_LEN);off+=NONCE_LEN;
+    var ct=data.slice(off);
+    return deriveKey(password,salt).then(function(key){
+      return crypto.subtle.decrypt({name:'AES-GCM',iv:nonce,tagLength:128},key,ct);
+    });
+  }
+
+  function deriveKey(password,salt){
+    var enc=new TextEncoder();
+    return crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']).then(function(km){
+      return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:ITERATIONS,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+    });
+  }
+})();
+</script>
+</body>
+</html>
