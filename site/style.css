@@ -152,6 +152,8 @@ nav {
 .hero-code {
   margin-top: 2.5rem;
   display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);

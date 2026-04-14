@@ -1,141 +1,182 @@
 # Cubbit Pages
 
-CLI per il deploy di siti statici su [Cubbit](https://cubbit.io) S3, con cifratura opzionale AES-256-GCM lato client.
+CLI to deploy static sites to [Cubbit](https://cubbit.io) S3, with optional AES-256-GCM client-side encryption.
 
-Zero backend. Zero server. Zero dipendenze npm.
+Zero backend. Zero server. Zero npm dependencies.
 
-## Come funziona
+## How it works
 
-1. Hai una cartella con un sito statico (HTML, CSS, JS, immagini...)
-2. Cubbit Pages la carica su un bucket Cubbit, rendendola accessibile come sito web
-3. Opzionalmente, tutti i file vengono cifrati: l'unica pagina in chiaro è `index.html` (pagina di login generata automaticamente)
-4. Inserita la password corretta, il browser decifra ogni pagina direttamente dal bucket
+1. You have a folder with a static site (HTML, CSS, JS, images...)
+2. Cubbit Pages uploads it to a Cubbit bucket, making it publicly accessible as a website
+3. Optionally, all files are encrypted: the only plaintext page is `index.html` (an auto-generated login page)
+4. Once the correct password is entered, the browser decrypts every page directly from the bucket
 
-## Installazione
+## Installation
 
-### Script automatico
+### Automatic script
 
 ```bash
-curl -sSL https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/install.sh | bash
+curl -sSL \
+  https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/install.sh \
+  | bash
 ```
 
-### Build da sorgente
+### Build from source
 
 ```bash
 git clone https://github.com/marcodellemarche/cubbit-pages.git
 cd cubbit-pages
 make build
-# Il binario è in bin/cubbit-pages
+# Binary is in bin/cubbit-pages
 ```
 
-## Setup Cubbit
+## Cubbit setup
 
-1. Crea un account su [console.cubbit.io](https://console.cubbit.io)
-2. Crea un bucket
-3. Genera una API key da [API Keys](https://console.cubbit.io/api-keys)
-4. Applica la bucket policy per accesso pubblico:
+1. Create an account at [console.cubbit.io](https://console.cubbit.io)
+2. Create a bucket
+3. Generate an API key from [API Keys](https://console.cubbit.io/api-keys)
+4. Show the bucket configuration snippets:
 
 ```bash
-cubbit-pages snippets --bucket MIO-BUCKET --type bucket-policy
+cubbit-pages snippets --bucket MY-BUCKET
 ```
 
-5. Per siti cifrati, configura anche CORS:
+5. For encrypted sites, also configure CORS:
 
 ```bash
-cubbit-pages snippets --bucket MIO-BUCKET --type cors
+cubbit-pages snippets --bucket MY-BUCKET --type cors
 ```
 
-## Uso
+## Usage
 
-### Deploy in chiaro
+### Plain deploy
 
 ```bash
-cubbit-pages deploy ./mio-sito \
-  --bucket mio-bucket \
+cubbit-pages deploy ./my-site \
+  --bucket my-bucket \
   --access-key AKIAIOSFODNN7EXAMPLE \
   --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 ```
 
-### Deploy cifrato
+### Encrypted deploy
 
 ```bash
-cubbit-pages deploy ./mio-sito \
-  --bucket mio-bucket \
+cubbit-pages deploy ./my-site \
+  --bucket my-bucket \
   --access-key ... \
   --secret-key ... \
   --encrypt \
-  --password "parola-parola-parola"
+  --password "my-secret-password"
 ```
 
-Se `--password` non è fornita con `--encrypt`, la CLI la chiede interattivamente.
+If `--password` is not provided with `--encrypt`, the CLI prompts interactively.
 
-### Variabili d'ambiente
+### Environment variables
 
-Tutte le credenziali possono essere passate via env:
+All credentials can be passed via env:
 
 ```bash
 export CUBBIT_ACCESS_KEY=...
 export CUBBIT_SECRET_KEY=...
-export CUBBIT_BUCKET=mio-bucket
+export CUBBIT_BUCKET=my-bucket
 
-cubbit-pages deploy ./mio-sito --encrypt --password "..."
+cubbit-pages deploy ./my-site --encrypt --password "..."
 ```
 
-## Navigazione su sito cifrato
+## GitHub Action
 
-Quando si fa un deploy cifrato:
+Cubbit Pages ships as a reusable GitHub Action. Drop it into any workflow:
 
-1. Tutti i file vengono cifrati con AES-256-GCM e caricati con estensione `.enc`
-2. Un `index.html` di login viene generato automaticamente
-3. L'`index.html` originale dell'utente diventa `index.html.enc`
-4. Un file `_verify.enc` (canary) permette di validare la password
-5. Per ogni file HTML, viene creato un "loader" che:
-   - Controlla se la password è in localStorage
-   - Se assente, redirect alla pagina di login
-   - Se presente, scarica il `.enc`, decifra in memoria, renderizza
+```yaml
+- uses: marcodellemarche/cubbit-pages@main
+  with:
+    source-dir: ./dist
+    bucket: my-bucket
+    access-key: ${{ secrets.CUBBIT_ACCESS_KEY }}
+    secret-key: ${{ secrets.CUBBIT_SECRET_KEY }}
+```
 
-L'URL nel browser rimane `index.html` durante la navigazione (limitazione v1).
+### Action inputs
 
-## Reference CLI
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `source-dir` | yes | — | Directory to deploy |
+| `bucket` | yes | — | Cubbit S3 bucket name |
+| `access-key` | yes | — | Cubbit access key |
+| `secret-key` | yes | — | Cubbit secret key |
+| `endpoint` | no | `https://s3.cubbit.eu` | S3 endpoint |
+| `encrypt` | no | `false` | Enable AES-256-GCM encryption |
+| `password` | no | — | Encryption password |
+| `public-bucket` | no | `false` | Skip per-object ACL |
+| `prefix` | no | — | S3 key prefix |
+| `concurrency` | no | `5` | Parallel uploads |
+| `version` | no | `latest` | CLI version to download |
 
-### `cubbit-pages deploy <cartella>`
+### Action output
 
-| Flag | Descrizione |
+| Output | Description |
+|--------|-------------|
+| `url` | URL of the deployed site |
+
+## Encrypted site navigation
+
+When deploying with `--encrypt`:
+
+1. All files are encrypted with AES-256-GCM and uploaded with `.enc` extension
+2. A login `index.html` is auto-generated
+3. The user's original `index.html` becomes `index.html.enc`
+4. A `_verify.enc` canary file validates the password
+5. For each HTML file, a "loader" page is created that:
+   - Checks for a password in localStorage
+   - If absent, redirects to the login page
+   - If present, fetches the `.enc` file, decrypts in memory, renders
+
+The browser URL stays at `index.html` during navigation (v1 limitation).
+
+## CLI reference
+
+### `cubbit-pages deploy <directory>`
+
+| Flag | Description |
 |------|-------------|
-| `--bucket`, `-b` | Nome bucket (o `CUBBIT_BUCKET`) |
-| `--access-key` | API key (o `CUBBIT_ACCESS_KEY`) |
-| `--secret-key` | Secret key (o `CUBBIT_SECRET_KEY`) |
-| `--endpoint` | Endpoint S3 (default: `https://s3.cubbit.eu`) |
-| `--encrypt`, `-e` | Abilita cifratura AES-256-GCM |
-| `--password`, `-p` | Password per cifratura |
-| `--public-bucket` | Assume bucket policy pubblica (no ACL per-oggetto) |
-| `--dry-run` | Mostra cosa verrebbe caricato senza farlo |
-| `--concurrency` | Upload paralleli (default: 5) |
-| `--prefix` | Prefisso S3 per tutti i file |
+| `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
+| `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
+| `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
+| `--endpoint` | S3 endpoint (default: `https://s3.cubbit.eu`) |
+| `--encrypt`, `-e` | Enable AES-256-GCM encryption |
+| `--password`, `-p` | Encryption password |
+| `--public-bucket` | Assume public bucket policy (skip per-object ACL) |
+| `--dry-run` | Show what would be uploaded without uploading |
+| `--concurrency` | Parallel uploads (default: 5) |
+| `--prefix` | S3 key prefix for all files |
 
 ### `cubbit-pages snippets`
 
-| Flag | Descrizione |
+| Flag | Description |
 |------|-------------|
-| `--bucket`, `-b` | Nome bucket |
+| `--bucket`, `-b` | Bucket name |
 | `--type` | `bucket-policy`, `cors`, `iam`, `lifecycle`, `all` (default: `all`) |
 
 ### `cubbit-pages version`
 
-Mostra versione, commit hash e data di build.
+Shows version, commit hash and build date.
 
-## Sicurezza
+## Security
 
-- Cifratura AES-256-GCM con chiave derivata via PBKDF2 (100.000 iterazioni, SHA-256)
-- Salt e nonce random per ogni file (16 byte e 12 byte)
-- La password non viene mai trasmessa in rete — la decifratura avviene nel browser
-- Il file canary (`_verify.enc`) permette di validare la password senza scaricare file grandi
-- Le credenziali S3 non vengono mai salvate su disco dalla CLI
+- AES-256-GCM encryption with PBKDF2 key derivation (100,000 iterations, SHA-256)
+- Random salt and nonce per file (16 bytes and 12 bytes)
+- Password never transmitted over the network — decryption happens in the browser
+- Canary file (`_verify.enc`) validates the password without downloading large files
+- S3 credentials are never saved to disk by the CLI
 
-## Relazione con Cubbit Seal
+## Related: Cubbit Seal
 
-Cubbit Pages è il progetto companion di [Cubbit Seal](https://github.com/marcodellemarche/cubbit-seal):
+Cubbit Pages is the companion project to [Cubbit Seal](https://github.com/marcodellemarche/cubbit-seal):
 
-- **Stile visivo**: stessi colori, font e motivi della pagina di login
-- **Formato crypto**: diverso intenzionalmente (`CPGS` vs `CBSH`) — non sono interoperabili
-- **Convenzioni**: stessa struttura di progetto e stile di codice
+- **Visual style**: same colors, fonts and patterns in the login page
+- **Crypto format**: intentionally different (`CPGS` vs `CBSH`) — not interoperable
+- **Conventions**: same project structure and code style
+
+## License
+
+[MIT](LICENSE)
