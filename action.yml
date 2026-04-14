@@ -44,7 +44,7 @@ inputs:
     required: false
     default: '5'
   version:
-    description: 'Cubbit Pages CLI version to use (e.g. v0.1.0, latest)'
+    description: 'Cubbit Pages CLI version to use (e.g. v0.1.0, latest). Ignored when used from the cubbit-pages repo itself.'
     required: false
     default: 'latest'
 
@@ -56,35 +56,36 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Determine OS and architecture
-      id: platform
+    - name: Install Cubbit Pages CLI
       shell: bash
       run: |
-        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-        ARCH=$(uname -m)
-        case "$ARCH" in
-          x86_64)  ARCH="amd64" ;;
-          aarch64) ARCH="arm64" ;;
-          arm64)   ARCH="arm64" ;;
-        esac
-        echo "os=$OS" >> "$GITHUB_OUTPUT"
-        echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
-        echo "binary=cubbit-pages-${OS}-${ARCH}" >> "$GITHUB_OUTPUT"
-
-    - name: Download Cubbit Pages CLI
-      shell: bash
-      run: |
-        VERSION="${{ inputs.version }}"
-        BINARY="${{ steps.platform.outputs.binary }}"
-
-        if [ "$VERSION" = "latest" ]; then
-          URL="https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/${BINARY}"
+        # If go.mod exists at the action path, we're in the cubbit-pages repo — build from source.
+        # Otherwise, download a prebuilt binary from GitHub Releases.
+        if [ -f "${{ github.action_path }}/go.mod" ]; then
+          echo "Building cubbit-pages from source..."
+          cd "${{ github.action_path }}"
+          go build -o /tmp/cubbit-pages ./cmd/cubbit-pages
         else
-          URL="https://github.com/marcodellemarche/cubbit-pages/releases/download/${VERSION}/${BINARY}"
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64)  ARCH="amd64" ;;
+            aarch64) ARCH="arm64" ;;
+            arm64)   ARCH="arm64" ;;
+          esac
+          BINARY="cubbit-pages-${OS}-${ARCH}"
+          VERSION="${{ inputs.version }}"
+
+          if [ "$VERSION" = "latest" ]; then
+            URL="https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/${BINARY}"
+          else
+            URL="https://github.com/marcodellemarche/cubbit-pages/releases/download/${VERSION}/${BINARY}"
+          fi
+
+          echo "Downloading ${BINARY} (${VERSION})..."
+          curl -fsSL -o /tmp/cubbit-pages "$URL"
         fi
 
-        echo "Downloading ${BINARY} (${VERSION})..."
-        curl -fsSL -o /tmp/cubbit-pages "$URL"
         chmod +x /tmp/cubbit-pages
         /tmp/cubbit-pages version
 
