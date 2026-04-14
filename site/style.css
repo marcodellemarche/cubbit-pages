@@ -231,7 +231,7 @@ nav {
 /* ── Install ─────────────────────────────────────────── */
 .install-methods {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr));
   gap: 1.5rem;
 }
 .install-method h3 {
@@ -254,7 +254,8 @@ nav {
 .code-block code {
   font-size: .8rem;
   color: var(--text);
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .copy-btn {
   position: absolute;

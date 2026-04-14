@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="https://s3.cubbit.eu/cubbit-pages-releases"
+REPO="marcodellemarche/cubbit-pages"
 BINARY="cubbit-pages"
 VERSION="${1:-latest}"
 
@@ -23,8 +23,14 @@ case "$ARCH" in
 esac
 
 FILENAME="${BINARY}-${OS}-${ARCH}"
-DOWNLOAD_URL="${REPO_URL}/${VERSION}/${FILENAME}"
-CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
+
+if [ "$VERSION" = "latest" ]; then
+  DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${FILENAME}"
+  CHECKSUM_URL="https://github.com/${REPO}/releases/latest/download/${FILENAME}.sha256"
+else
+  DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${FILENAME}"
+  CHECKSUM_URL="https://github.com/${REPO}/releases/download/${VERSION}/${FILENAME}.sha256"
+fi
 
 echo "Downloading ${BINARY} ${VERSION} for ${OS}/${ARCH}..."
 
@@ -69,4 +75,4 @@ else
 fi
 
 echo "cubbit-pages installed successfully!"
-${INSTALL_DIR}/${BINARY} version
+"${INSTALL_DIR}/${BINARY}" version

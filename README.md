@@ -16,7 +16,7 @@ Zero backend. Zero server. Zero dipendenze npm.
 ### Script automatico
 
 ```bash
-curl -sSL https://s3.cubbit.eu/cubbit-pages-releases/install.sh | bash
+curl -sSL https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/install.sh | bash
 ```
 
 ### Build da sorgente
