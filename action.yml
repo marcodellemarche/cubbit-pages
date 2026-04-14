@@ -1,0 +1,120 @@
+name: 'Cubbit Pages Deploy'
+description: 'Deploy a static site to Cubbit S3 with optional AES-256-GCM encryption'
+author: 'marcodellemarche'
+
+branding:
+  icon: 'upload-cloud'
+  color: 'blue'
+
+inputs:
+  source-dir:
+    description: 'Directory containing the static site to deploy'
+    required: true
+  bucket:
+    description: 'Cubbit S3 bucket name'
+    required: true
+  access-key:
+    description: 'Cubbit S3 access key'
+    required: true
+  secret-key:
+    description: 'Cubbit S3 secret key'
+    required: true
+  endpoint:
+    description: 'S3 endpoint URL'
+    required: false
+    default: 'https://s3.cubbit.eu'
+  encrypt:
+    description: 'Enable AES-256-GCM encryption'
+    required: false
+    default: 'false'
+  password:
+    description: 'Encryption password (required if encrypt is true)'
+    required: false
+    default: ''
+  public-bucket:
+    description: 'Assume public bucket policy (skip per-object ACL)'
+    required: false
+    default: 'false'
+  prefix:
+    description: 'S3 key prefix for all uploaded files'
+    required: false
+    default: ''
+  concurrency:
+    description: 'Number of parallel uploads'
+    required: false
+    default: '5'
+  version:
+    description: 'Cubbit Pages CLI version to use (e.g. v0.1.0, latest)'
+    required: false
+    default: 'latest'
+
+outputs:
+  url:
+    description: 'URL of the deployed site'
+    value: ${{ steps.deploy.outputs.url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Determine OS and architecture
+      id: platform
+      shell: bash
+      run: |
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          x86_64)  ARCH="amd64" ;;
+          aarch64) ARCH="arm64" ;;
+          arm64)   ARCH="arm64" ;;
+        esac
+        echo "os=$OS" >> "$GITHUB_OUTPUT"
+        echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
+        echo "binary=cubbit-pages-${OS}-${ARCH}" >> "$GITHUB_OUTPUT"
+
+    - name: Download Cubbit Pages CLI
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        BINARY="${{ steps.platform.outputs.binary }}"
+
+        if [ "$VERSION" = "latest" ]; then
+          URL="https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/${BINARY}"
+        else
+          URL="https://github.com/marcodellemarche/cubbit-pages/releases/download/${VERSION}/${BINARY}"
+        fi
+
+        echo "Downloading ${BINARY} (${VERSION})..."
+        curl -fsSL -o /tmp/cubbit-pages "$URL"
+        chmod +x /tmp/cubbit-pages
+        /tmp/cubbit-pages version
+
+    - name: Deploy
+      id: deploy
+      shell: bash
+      run: |
+        ARGS="deploy ${{ inputs.source-dir }} --bucket ${{ inputs.bucket }} --endpoint ${{ inputs.endpoint }} --concurrency ${{ inputs.concurrency }}"
+
+        if [ "${{ inputs.encrypt }}" = "true" ]; then
+          ARGS="$ARGS --encrypt --password ${{ inputs.password }}"
+        fi
+
+        if [ "${{ inputs.public-bucket }}" = "true" ]; then
+          ARGS="$ARGS --public-bucket"
+        fi
+
+        if [ -n "${{ inputs.prefix }}" ]; then
+          ARGS="$ARGS --prefix ${{ inputs.prefix }}"
+        fi
+
+        /tmp/cubbit-pages $ARGS \
+          --access-key "${{ inputs.access-key }}" \
+          --secret-key "${{ inputs.secret-key }}"
+
+        # Extract URL for output
+        PREFIX="${{ inputs.prefix }}"
+        if [ -n "$PREFIX" ]; then
+          PREFIX="${PREFIX}/"
+        fi
+        URL="${{ inputs.endpoint }}/${{ inputs.bucket }}/${PREFIX}index.html"
+        echo "url=$URL" >> "$GITHUB_OUTPUT"
+        echo "Deployed to: $URL"
