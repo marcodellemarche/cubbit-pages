@@ -21,44 +21,6 @@
 
   var encUrl='{{ENC_URL}}';
 
-  ensureServiceWorker(pwd).then(function(swActive){
-    if(swActive){
-      // SW is active — fetch the original URL (without .enc), the SW will handle decryption
-      var originalUrl=encUrl.replace(/\.enc$/,'');
-      return fetch(originalUrl).then(function(r){
-        if(!r.ok)throw new Error('fetch failed');
-        return r.text();
-      }).then(function(html){
-        document.open();
-        document.write(html);
-        document.close();
-      });
-    }else{
-      // Fallback: direct decryption (no SW support)
-      return loadEncryptedDirect();
-    }
-  }).catch(function(){
-    localStorage.removeItem(STORAGE_KEY);
-    if(navigator.serviceWorker&&navigator.serviceWorker.controller){
-      navigator.serviceWorker.controller.postMessage({type:'CLEAR_PASSWORD'});
-    }
-    window.location.href='index.html';
-  });
-
-  function loadEncryptedDirect(){
-    return fetch(encUrl).then(function(r){
-      if(!r.ok)throw new Error('fetch failed');
-      return r.arrayBuffer();
-    }).then(function(buf){
-      return decryptData(new Uint8Array(buf),pwd);
-    }).then(function(plain){
-      var html=new TextDecoder().decode(plain);
-      document.open();
-      document.write(html);
-      document.close();
-    });
-  }
-
   function ensureServiceWorker(p){
     if(!('serviceWorker' in navigator)){
       return Promise.resolve(false);
@@ -77,6 +39,20 @@
       });
     }).catch(function(){
       return false;
+    });
+  }
+
+  function loadEncryptedDirect(){
+    return fetch(encUrl).then(function(r){
+      if(!r.ok)throw new Error('fetch failed');
+      return r.arrayBuffer();
+    }).then(function(buf){
+      return decryptData(new Uint8Array(buf),pwd);
+    }).then(function(plain){
+      var html=new TextDecoder().decode(plain);
+      document.open();
+      document.write(html);
+      document.close();
     });
   }
 
@@ -99,6 +75,29 @@
       return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:ITERATIONS,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
     });
   }
+
+  // --- Main: register SW then load page ---
+  ensureServiceWorker(pwd).then(function(swActive){
+    if(swActive){
+      var originalUrl=encUrl.replace(/\.enc$/,'');
+      return fetch(originalUrl).then(function(r){
+        if(!r.ok)throw new Error('fetch failed');
+        return r.text();
+      }).then(function(html){
+        document.open();
+        document.write(html);
+        document.close();
+      });
+    }else{
+      return loadEncryptedDirect();
+    }
+  }).catch(function(){
+    localStorage.removeItem(STORAGE_KEY);
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({type:'CLEAR_PASSWORD'});
+    }
+    window.location.href='index.html';
+  });
 })();
 </script>
 </body>

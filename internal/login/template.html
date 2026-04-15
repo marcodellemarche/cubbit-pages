@@ -78,60 +78,33 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
   var STORAGE_KEY='cubbitseal_password';
   var VERIFY_FILE='_verify.enc';
 
-  // Check if already authenticated
-  var savedPwd=localStorage.getItem(STORAGE_KEY);
-  if(savedPwd){
-    ensureServiceWorker(savedPwd).then(function(){
-      redirectToTarget();
-    });
-    return;
-  }
+  // --- Function definitions (before any calls) ---
 
-  var form=document.getElementById('login-form');
-  var pwdInput=document.getElementById('password');
-  var errorMsg=document.getElementById('error-msg');
-  var spinner=document.getElementById('spinner');
-  var submitBtn=document.getElementById('submit-btn');
-  var togglePw=document.querySelector('.toggle-pw');
-
-  togglePw.addEventListener('click',function(){
-    var t=pwdInput.type==='password'?'text':'password';
-    pwdInput.setAttribute('type',t);
-  });
-
-  form.addEventListener('submit',function(e){
-    e.preventDefault();
-    var pwd=pwdInput.value;
-    if(!pwd)return;
-    errorMsg.classList.remove('show');
-    spinner.classList.add('show');
-    submitBtn.disabled=true;
-    verifyPassword(pwd).then(function(ok){
-      if(!ok){
-        spinner.classList.remove('show');
-        errorMsg.classList.add('show');
-        submitBtn.disabled=false;
-        pwdInput.focus();
-        return;
-      }
-      localStorage.setItem(STORAGE_KEY,pwd);
-      return ensureServiceWorker(pwd).then(function(){
-        spinner.classList.remove('show');
-        redirectToTarget();
+  function ensureServiceWorker(pwd){
+    if(!('serviceWorker' in navigator)){
+      return Promise.resolve();
+    }
+    return navigator.serviceWorker.register('sw.js').then(function(){
+      return navigator.serviceWorker.ready;
+    }).then(function(reg){
+      var sw=reg.active;
+      return new Promise(function(resolve){
+        var ch=new MessageChannel();
+        ch.port1.onmessage=function(ev){
+          if(ev.data&&ev.data.type==='PASSWORD_SET') resolve();
+        };
+        sw.postMessage({type:'SET_PASSWORD',password:pwd},[ch.port2]);
+        setTimeout(resolve,2000);
       });
     }).catch(function(){
-      spinner.classList.remove('show');
-      errorMsg.textContent='Errore di rete — riprova';
-      errorMsg.classList.add('show');
-      submitBtn.disabled=false;
+      return Promise.resolve();
     });
-  });
+  }
 
   function redirectToTarget(){
     var params=new URLSearchParams(window.location.search);
     var target=params.get('r')||'index.html';
     if(target==='index.html'){
-      // Load the encrypted original index
       loadEncryptedPage('index.html.enc');
     }else{
       loadEncryptedPage(target+'.enc');
@@ -193,28 +166,56 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
     });
   }
 
-  function ensureServiceWorker(pwd){
-    if(!('serviceWorker' in navigator)){
-      return Promise.resolve();
-    }
-    return navigator.serviceWorker.register('sw.js').then(function(){
-      return navigator.serviceWorker.ready;
-    }).then(function(reg){
-      var sw=reg.active;
-      return new Promise(function(resolve){
-        var ch=new MessageChannel();
-        ch.port1.onmessage=function(ev){
-          if(ev.data&&ev.data.type==='PASSWORD_SET') resolve();
-        };
-        sw.postMessage({type:'SET_PASSWORD',password:pwd},[ch.port2]);
-        // Fallback timeout in case the SW doesn't respond
-        setTimeout(resolve,2000);
+  // --- Main logic ---
+
+  // Check if already authenticated
+  var savedPwd=localStorage.getItem(STORAGE_KEY);
+  if(savedPwd){
+    ensureServiceWorker(savedPwd).then(function(){
+      redirectToTarget();
+    });
+    return;
+  }
+
+  var form=document.getElementById('login-form');
+  var pwdInput=document.getElementById('password');
+  var errorMsg=document.getElementById('error-msg');
+  var spinner=document.getElementById('spinner');
+  var submitBtn=document.getElementById('submit-btn');
+  var togglePw=document.querySelector('.toggle-pw');
+
+  togglePw.addEventListener('click',function(){
+    var t=pwdInput.type==='password'?'text':'password';
+    pwdInput.setAttribute('type',t);
+  });
+
+  form.addEventListener('submit',function(e){
+    e.preventDefault();
+    var pwd=pwdInput.value;
+    if(!pwd)return;
+    errorMsg.classList.remove('show');
+    spinner.classList.add('show');
+    submitBtn.disabled=true;
+    verifyPassword(pwd).then(function(ok){
+      if(!ok){
+        spinner.classList.remove('show');
+        errorMsg.classList.add('show');
+        submitBtn.disabled=false;
+        pwdInput.focus();
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY,pwd);
+      return ensureServiceWorker(pwd).then(function(){
+        spinner.classList.remove('show');
+        redirectToTarget();
       });
     }).catch(function(){
-      // SW registration failed — continue without it (single-file fallback)
-      return Promise.resolve();
+      spinner.classList.remove('show');
+      errorMsg.textContent='Errore di rete — riprova';
+      errorMsg.classList.add('show');
+      submitBtn.disabled=false;
     });
-  }
+  });
 })();
 </script>
 </body>
