@@ -126,12 +126,14 @@ When deploying with `--encrypt`:
 2. A login `index.html` is auto-generated
 3. The user's original `index.html` becomes `index.html.enc`
 4. A `_verify.enc` canary file validates the password
-5. For each HTML file, a "loader" page is created that:
-   - Checks for a password in localStorage
-   - If absent, redirects to the login page
-   - If present, fetches the `.enc` file, decrypts in memory, renders
+5. A **service worker** (`sw.js`) is uploaded alongside the login page:
+   - After login, the SW is registered and receives the password via `postMessage`
+   - It intercepts every browser fetch (scripts, stylesheets, images, fonts, etc.)
+   - For each request: if the original resource returns 404, it tries `<url>.enc`, decrypts in-memory, and returns the plaintext with the correct `Content-Type`
+   - Decrypted responses are cached for performance
+6. For each HTML file, a "loader" page handles direct navigation (e.g., bookmark to `/about.html`)
 
-The browser URL stays at `index.html` during navigation (v1 limitation).
+This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.), sites with separate JS/CSS/images, all work transparently after login.
 
 ## CLI reference
 
@@ -167,6 +169,8 @@ Shows version, commit hash and build date.
 - Random salt and nonce per file (16 bytes and 12 bytes)
 - Password never transmitted over the network — decryption happens in the browser
 - Canary file (`_verify.enc`) validates the password without downloading large files
+- Service worker holds the password only in memory (never persisted to disk)
+- `sw.js` is the only unencrypted file besides the login page (it contains no secrets)
 - S3 credentials are never saved to disk by the CLI
 
 ## Related: Cubbit Seal
