@@ -322,6 +322,51 @@ func TestLoaderRegistersCorrectSWFile(t *testing.T) {
 	}
 }
 
+// --- Critical: SW persists password to IndexedDB for restart survival ---
+
+func TestServiceWorkerPersistsPasswordToIndexedDB(t *testing.T) {
+	js := GenerateServiceWorker()
+	// Must use IndexedDB for persistence
+	if !strings.Contains(js, "indexedDB") {
+		t.Fatal("service worker must use IndexedDB for password persistence")
+	}
+	// Must save password when received
+	if !strings.Contains(js, "savePassword") {
+		t.Fatal("service worker must call savePassword when receiving SET_PASSWORD")
+	}
+	// Must load password in fetch handler when memory is empty
+	if !strings.Contains(js, "ensurePassword") {
+		t.Fatal("service worker must call ensurePassword in fetch handler")
+	}
+	if !strings.Contains(js, "loadPassword") {
+		t.Fatal("service worker must have loadPassword function for IndexedDB reads")
+	}
+}
+
+func TestServiceWorkerHandlesClearPassword(t *testing.T) {
+	js := GenerateServiceWorker()
+	if !strings.Contains(js, "CLEAR_PASSWORD") {
+		t.Fatal("service worker must handle CLEAR_PASSWORD message")
+	}
+	if !strings.Contains(js, "clearPassword") {
+		t.Fatal("service worker must call clearPassword to remove from IndexedDB")
+	}
+}
+
+func TestLoginPageSendsClearPasswordOnLogout(t *testing.T) {
+	html := GenerateLoginPage()
+	if !strings.Contains(html, "CLEAR_PASSWORD") {
+		t.Fatal("login page must send CLEAR_PASSWORD to SW when clearing localStorage")
+	}
+}
+
+func TestLoaderSendsClearPasswordOnLogout(t *testing.T) {
+	loader := GenerateLoader("test.html.enc")
+	if !strings.Contains(loader, "CLEAR_PASSWORD") {
+		t.Fatal("loader must send CLEAR_PASSWORD to SW when clearing localStorage")
+	}
+}
+
 // --- Service worker: .enc fetch fallback pattern ---
 
 func TestServiceWorkerFetchAndDecryptPattern(t *testing.T) {

@@ -10,8 +10,61 @@ var ITERATIONS = 100000;
 
 var password = null;
 var CACHE_NAME = 'cubbit-pages-v1';
+var DB_NAME = 'cubbit-pages';
+var DB_STORE = 'auth';
+var DB_KEY = 'password';
 
-// MIME type map (matches upload.go)
+// --- IndexedDB persistence for password ---
+// The SW can be terminated by the browser at any time. When restarted,
+// the in-memory password variable is null. We persist to IndexedDB
+// (which the SW can access, unlike localStorage) so the password
+// survives SW restarts without requiring a round-trip to clients.
+
+function openDB() {
+  return new Promise(function(resolve, reject) {
+    var req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = function(e) {
+      e.target.result.createObjectStore(DB_STORE);
+    };
+    req.onsuccess = function(e) { resolve(e.target.result); };
+    req.onerror = function(e) { reject(e.target.error); };
+  });
+}
+
+function savePassword(pwd) {
+  return openDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).put(pwd, DB_KEY);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function(e) { reject(e.target.error); };
+    });
+  });
+}
+
+function loadPassword() {
+  return openDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(DB_STORE, 'readonly');
+      var req = tx.objectStore(DB_STORE).get(DB_KEY);
+      req.onsuccess = function() { resolve(req.result || null); };
+      req.onerror = function(e) { reject(e.target.error); };
+    });
+  });
+}
+
+function clearPassword() {
+  return openDB().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).delete(DB_KEY);
+      tx.oncomplete = function() { resolve(); };
+      tx.onerror = function(e) { reject(e.target.error); };
+    });
+  });
+}
+
+// --- MIME type map (matches upload.go) ---
 var MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.htm': 'text/html; charset=utf-8',
@@ -96,6 +149,8 @@ self.addEventListener('activate', function(e) {
 self.addEventListener('message', function(e) {
   if (e.data && e.data.type === 'SET_PASSWORD') {
     password = e.data.password;
+    // Persist to IndexedDB so it survives SW restarts
+    savePassword(password);
     // Clear cached decrypted files when password changes
     caches.delete(CACHE_NAME);
     // Confirm via MessageChannel port if available, else via source
@@ -106,7 +161,23 @@ self.addEventListener('message', function(e) {
       e.source.postMessage(reply);
     }
   }
+  if (e.data && e.data.type === 'CLEAR_PASSWORD') {
+    password = null;
+    clearPassword();
+    caches.delete(CACHE_NAME);
+  }
 });
+
+// Ensure password is available, restoring from IndexedDB if needed
+function ensurePassword() {
+  if (password) return Promise.resolve(password);
+  return loadPassword().then(function(pwd) {
+    if (pwd) password = pwd;
+    return pwd;
+  }).catch(function() {
+    return null;
+  });
+}
 
 self.addEventListener('fetch', function(e) {
   // Only handle same-origin GET requests
@@ -133,21 +204,26 @@ self.addEventListener('fetch', function(e) {
   // Don't intercept .enc files — those are fetched directly by this SW
   if (path.endsWith('.enc')) return;
 
-  if (!password) return;
-
   e.respondWith(
-    caches.open(CACHE_NAME).then(function(cache) {
-      return cache.match(e.request).then(function(cached) {
-        if (cached) return cached;
+    ensurePassword().then(function(pwd) {
+      if (!pwd) {
+        // No password available — let the request through unmodified
+        return fetch(e.request);
+      }
 
-        // Try the original URL first (in case it exists unencrypted)
-        return fetch(e.request).then(function(response) {
-          if (response.ok) return response;
-          // Not found — try .enc version
-          return fetchAndDecrypt(e.request.url, cache);
-        }).catch(function() {
-          // Network error — try .enc version
-          return fetchAndDecrypt(e.request.url, cache);
+      return caches.open(CACHE_NAME).then(function(cache) {
+        return cache.match(e.request).then(function(cached) {
+          if (cached) return cached;
+
+          // Try the original URL first (in case it exists unencrypted)
+          return fetch(e.request).then(function(response) {
+            if (response.ok) return response;
+            // Not found — try .enc version
+            return fetchAndDecrypt(e.request.url, cache);
+          }).catch(function() {
+            // Network error — try .enc version
+            return fetchAndDecrypt(e.request.url, cache);
+          });
         });
       });
     })

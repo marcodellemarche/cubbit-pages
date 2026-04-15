@@ -39,6 +39,9 @@
     }
   }).catch(function(){
     localStorage.removeItem(STORAGE_KEY);
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({type:'CLEAR_PASSWORD'});
+    }
     window.location.href='index.html';
   });
 
