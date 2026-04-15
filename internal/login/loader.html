@@ -20,20 +20,62 @@
   if(!pwd){window.location.href='index.html';return;}
 
   var encUrl='{{ENC_URL}}';
-  fetch(encUrl).then(function(r){
-    if(!r.ok)throw new Error('fetch failed');
-    return r.arrayBuffer();
-  }).then(function(buf){
-    return decryptData(new Uint8Array(buf),pwd);
-  }).then(function(plain){
-    var html=new TextDecoder().decode(plain);
-    document.open();
-    document.write(html);
-    document.close();
+
+  ensureServiceWorker(pwd).then(function(swActive){
+    if(swActive){
+      // SW is active — fetch the original URL (without .enc), the SW will handle decryption
+      var originalUrl=encUrl.replace(/\.enc$/,'');
+      return fetch(originalUrl).then(function(r){
+        if(!r.ok)throw new Error('fetch failed');
+        return r.text();
+      }).then(function(html){
+        document.open();
+        document.write(html);
+        document.close();
+      });
+    }else{
+      // Fallback: direct decryption (no SW support)
+      return loadEncryptedDirect();
+    }
   }).catch(function(){
     localStorage.removeItem(STORAGE_KEY);
     window.location.href='index.html';
   });
+
+  function loadEncryptedDirect(){
+    return fetch(encUrl).then(function(r){
+      if(!r.ok)throw new Error('fetch failed');
+      return r.arrayBuffer();
+    }).then(function(buf){
+      return decryptData(new Uint8Array(buf),pwd);
+    }).then(function(plain){
+      var html=new TextDecoder().decode(plain);
+      document.open();
+      document.write(html);
+      document.close();
+    });
+  }
+
+  function ensureServiceWorker(p){
+    if(!('serviceWorker' in navigator)){
+      return Promise.resolve(false);
+    }
+    return navigator.serviceWorker.register('sw.js').then(function(){
+      return navigator.serviceWorker.ready;
+    }).then(function(reg){
+      var sw=reg.active;
+      return new Promise(function(resolve){
+        var ch=new MessageChannel();
+        ch.port1.onmessage=function(ev){
+          if(ev.data&&ev.data.type==='PASSWORD_SET') resolve(true);
+        };
+        sw.postMessage({type:'SET_PASSWORD',password:p},[ch.port2]);
+        setTimeout(function(){resolve(true);},2000);
+      });
+    }).catch(function(){
+      return false;
+    });
+  }
 
   function decryptData(data,password){
     if(data.length<HEADER_LEN)return Promise.reject('too short');

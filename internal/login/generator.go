@@ -14,3 +14,8 @@ func GenerateLoginPage() string {
 func GenerateLoader(encURL string) string {
 	return strings.Replace(loaderTemplateHTML, "{{ENC_URL}}", encURL, 1)
 }
+
+// GenerateServiceWorker returns the service worker JavaScript source.
+func GenerateServiceWorker() string {
+	return serviceWorkerJS
+}

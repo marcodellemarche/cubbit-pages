@@ -81,6 +81,10 @@ func runWithUploader(ctx context.Context, files []FileEntry, opts Options, uploa
 		loginHTML := login.GenerateLoginPage()
 		items = append(items, uploadItem{key: "index.html", data: []byte(loginHTML)})
 
+		// Generate service worker (must be unencrypted and at scope root)
+		swJS := login.GenerateServiceWorker()
+		items = append(items, uploadItem{key: "sw.js", data: []byte(swJS)})
+
 		// Generate canary file
 		canary, err := crypto.EncryptCanary(opts.Password)
 		if err != nil {
@@ -180,6 +184,7 @@ func dryRun(files []FileEntry, opts Options) (*Result, error) {
 
 	if opts.Encrypt {
 		resultFiles = append(resultFiles, "index.html")
+		resultFiles = append(resultFiles, "sw.js")
 		resultFiles = append(resultFiles, "_verify.enc")
 
 		for _, f := range files {

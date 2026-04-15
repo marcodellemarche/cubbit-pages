@@ -81,7 +81,9 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
   // Check if already authenticated
   var savedPwd=localStorage.getItem(STORAGE_KEY);
   if(savedPwd){
-    redirectToTarget();
+    ensureServiceWorker(savedPwd).then(function(){
+      redirectToTarget();
+    });
     return;
   }
 
@@ -105,15 +107,18 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
     spinner.classList.add('show');
     submitBtn.disabled=true;
     verifyPassword(pwd).then(function(ok){
-      spinner.classList.remove('show');
-      if(ok){
-        localStorage.setItem(STORAGE_KEY,pwd);
-        redirectToTarget();
-      }else{
+      if(!ok){
+        spinner.classList.remove('show');
         errorMsg.classList.add('show');
         submitBtn.disabled=false;
         pwdInput.focus();
+        return;
       }
+      localStorage.setItem(STORAGE_KEY,pwd);
+      return ensureServiceWorker(pwd).then(function(){
+        spinner.classList.remove('show');
+        redirectToTarget();
+      });
     }).catch(function(){
       spinner.classList.remove('show');
       errorMsg.textContent='Errore di rete — riprova';
@@ -182,6 +187,29 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
     var enc=new TextEncoder();
     return crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']).then(function(km){
       return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:ITERATIONS,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+    });
+  }
+
+  function ensureServiceWorker(pwd){
+    if(!('serviceWorker' in navigator)){
+      return Promise.resolve();
+    }
+    return navigator.serviceWorker.register('sw.js').then(function(){
+      return navigator.serviceWorker.ready;
+    }).then(function(reg){
+      var sw=reg.active;
+      return new Promise(function(resolve){
+        var ch=new MessageChannel();
+        ch.port1.onmessage=function(ev){
+          if(ev.data&&ev.data.type==='PASSWORD_SET') resolve();
+        };
+        sw.postMessage({type:'SET_PASSWORD',password:pwd},[ch.port2]);
+        // Fallback timeout in case the SW doesn't respond
+        setTimeout(resolve,2000);
+      });
+    }).catch(function(){
+      // SW registration failed — continue without it (single-file fallback)
+      return Promise.resolve();
     });
   }
 })();
