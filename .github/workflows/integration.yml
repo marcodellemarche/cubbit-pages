@@ -53,7 +53,8 @@ jobs:
         run: |
           ./scripts/test-deploy.sh \
             --bucket pages-test \
-            --endpoint http://localhost:9000
+            --endpoint http://localhost:9000 \
+            --public-bucket
 
   integration-cubbit:
     runs-on: ubuntu-latest

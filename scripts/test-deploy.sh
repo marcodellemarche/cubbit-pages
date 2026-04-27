@@ -27,12 +27,14 @@ SITE="${CUBBIT_PAGES_SITE:-$ROOT/testdata/site}"
 PASSWORD="${CUBBIT_PAGES_PASSWORD:-test-password-123}"
 PREFIX="${CUBBIT_PAGES_PREFIX:-test-prefix}"
 ENDPOINT="${CUBBIT_ENDPOINT:-}"
+PUBLIC_BUCKET="${CUBBIT_PAGES_PUBLIC_BUCKET:-false}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --bucket)   BUCKET="$2";   shift 2 ;;
-    --endpoint) ENDPOINT="$2"; shift 2 ;;
-    --binary)   BIN="$2";      shift 2 ;;
+    --bucket)        BUCKET="$2";       shift 2 ;;
+    --endpoint)      ENDPOINT="$2";     shift 2 ;;
+    --binary)        BIN="$2";          shift 2 ;;
+    --public-bucket) PUBLIC_BUCKET=true; shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
@@ -136,6 +138,9 @@ echo ""
 BASE_FLAGS=(--access-key "$AK" --secret-key "$SK" --bucket "$BUCKET")
 if [[ -n "$ENDPOINT" ]]; then
   BASE_FLAGS+=(--endpoint "$ENDPOINT")
+fi
+if [[ "$PUBLIC_BUCKET" == "true" ]]; then
+  BASE_FLAGS+=(--public-bucket)
 fi
 
 echo "── No prefix ──────────────────────────────────"
