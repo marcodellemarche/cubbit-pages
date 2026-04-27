@@ -58,7 +58,8 @@
       <a href="#download" class="btn btn-outline">Download binaries</a>
     </div>
     <div class="hero-code">
-      <pre><code><span class="dim">$</span> cubbit-pages deploy ./my-site --bucket my-bucket --encrypt</code></pre>
+      <pre><code><span class="dim">$</span> cubbit-pages setup
+<span class="dim">$</span> cubbit-pages deploy ./my-site --encrypt</code></pre>
     </div>
   </section>
 
@@ -100,6 +101,13 @@
         </div>
         <h3>Ready-made snippets</h3>
         <p>Auto-generates bucket policy, CORS, IAM policy and lifecycle commands with a single command.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </div>
+        <h3>One-time setup</h3>
+        <p>Run <code>cubbit-pages setup</code> once to save credentials to <code>~/.cubbit/pages/config.yaml</code>. No flags needed on every deploy.</p>
       </div>
       <div class="card">
         <div class="card-icon">
@@ -228,6 +236,16 @@ make build</code></pre>
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-content">
+          <h3>Save your credentials</h3>
+          <p style="margin:0 0 0.75rem;color:var(--text-muted);font-size:0.9rem">One-time interactive setup. Saves to <code>~/.cubbit/pages/config.yaml</code>.</p>
+          <div class="code-block">
+            <pre><code>cubbit-pages setup</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
           <h3>Configure your bucket</h3>
           <div class="code-block">
             <pre><code>cubbit-pages snippets --bucket my-bucket</code></pre>
@@ -235,26 +253,20 @@ make build</code></pre>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">2</div>
+        <div class="step-num">3</div>
         <div class="step-content">
           <h3>Deploy in the clear</h3>
           <div class="code-block">
-            <pre><code>cubbit-pages deploy ./my-site \
-  --bucket my-bucket \
-  --access-key $CUBBIT_ACCESS_KEY \
-  --secret-key $CUBBIT_SECRET_KEY</code></pre>
+            <pre><code>cubbit-pages deploy ./my-site</code></pre>
           </div>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">3</div>
+        <div class="step-num">4</div>
         <div class="step-content">
           <h3>Or deploy encrypted</h3>
           <div class="code-block">
             <pre><code>cubbit-pages deploy ./my-site \
-  --bucket my-bucket \
-  --access-key $CUBBIT_ACCESS_KEY \
-  --secret-key $CUBBIT_SECRET_KEY \
   --encrypt --password "my-secret-password"</code></pre>
           </div>
         </div>
