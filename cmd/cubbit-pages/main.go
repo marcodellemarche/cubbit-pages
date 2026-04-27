@@ -128,7 +128,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			continue
 
 		case s3client.BucketForbidden:
-			fmt.Println("\n  ✗ Bucket esistente ma non tuo. Scegli un altro nome.\n")
+			fmt.Print("\n  ✗ Bucket esistente ma non tuo. Scegli un altro nome.\n\n")
 			continue
 
 		case s3client.BucketNotFound:
@@ -136,7 +136,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			if err := client.CreateBucket(ctx, bucket, config.DefaultRegion); err != nil {
 				es := err.Error()
 				if strings.Contains(es, "BucketAlreadyExists") {
-					fmt.Println("\n  ✗ Bucket già esistente e non tuo. Scegli un altro nome.\n")
+					fmt.Print("\n  ✗ Bucket già esistente e non tuo. Scegli un altro nome.\n\n")
 					continue
 				}
 				if strings.Contains(es, "InvalidBucketName") {
@@ -146,7 +146,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 				fmt.Printf("\n  ✗ Errore: %v\n\n", err)
 				continue
 			}
-			fmt.Println(" ✓\n")
+			fmt.Print(" ✓\n\n")
 			goto bucketOK
 		}
 	}
