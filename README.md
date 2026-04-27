@@ -35,13 +35,21 @@ make build
 1. Create an account at [console.cubbit.io](https://console.cubbit.io)
 2. Create a bucket
 3. Generate an API key from [API Keys](https://console.cubbit.io/api-keys)
-4. Show the bucket configuration snippets:
+4. Run the interactive setup wizard:
+
+```bash
+cubbit-pages setup
+```
+
+This saves credentials to `~/.cubbit/pages/config.yaml` so you don't need to repeat them on every deploy.
+
+5. Show the bucket configuration snippets:
 
 ```bash
 cubbit-pages snippets --bucket MY-BUCKET
 ```
 
-5. For encrypted sites, also configure CORS:
+6. For encrypted sites, also configure CORS:
 
 ```bash
 cubbit-pages snippets --bucket MY-BUCKET --type cors
@@ -52,6 +60,10 @@ cubbit-pages snippets --bucket MY-BUCKET --type cors
 ### Plain deploy
 
 ```bash
+# After setup — credentials loaded from ~/.cubbit/pages/config.yaml
+cubbit-pages deploy ./my-site
+
+# Or pass credentials explicitly
 cubbit-pages deploy ./my-site \
   --bucket my-bucket \
   --access-key AKIAIOSFODNN7EXAMPLE \
@@ -61,19 +73,19 @@ cubbit-pages deploy ./my-site \
 ### Encrypted deploy
 
 ```bash
-cubbit-pages deploy ./my-site \
-  --bucket my-bucket \
-  --access-key ... \
-  --secret-key ... \
-  --encrypt \
-  --password "my-secret-password"
-```
+# Password as flag
+cubbit-pages deploy ./my-site --encrypt --password "my-secret-password"
 
-If `--password` is not provided with `--encrypt`, the CLI prompts interactively.
+# Password from stdin (useful for scripts)
+echo "my-secret-password" | cubbit-pages deploy ./my-site --encrypt
+
+# Password prompted interactively (if --password is omitted)
+cubbit-pages deploy ./my-site --encrypt
+```
 
 ### Environment variables
 
-All credentials can be passed via env:
+All credentials can be passed via env (overrides config file):
 
 ```bash
 export CUBBIT_ACCESS_KEY=...
@@ -82,6 +94,8 @@ export CUBBIT_BUCKET=my-bucket
 
 cubbit-pages deploy ./my-site --encrypt --password "..."
 ```
+
+Priority: CLI flags > environment variables > `~/.cubbit/pages/config.yaml`
 
 ## GitHub Action
 
@@ -158,6 +172,10 @@ This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.)
 |------|-------------|
 | `--bucket`, `-b` | Bucket name |
 | `--type` | `bucket-policy`, `cors`, `iam`, `lifecycle`, `all` (default: `all`) |
+
+### `cubbit-pages setup`
+
+Interactive wizard. Prompts for Access Key, Secret Key, Bucket and Endpoint (optional), then saves to `~/.cubbit/pages/config.yaml` (mode 0600). Credentials loaded by subsequent commands with lowest priority (flags and env override them).
 
 ### `cubbit-pages version`
 

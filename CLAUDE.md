@@ -14,24 +14,23 @@ CLI Go per deploy di siti statici su Cubbit S3, con cifratura opzionale AES-256-
 - `make build` — build per la piattaforma corrente
 - `make release` — cross-compile per tutte le piattaforme target
 - `make test` — go test ./...
+- `make test-integration` — build + integration test end-to-end (richiede CUBBIT_ACCESS_KEY, CUBBIT_SECRET_KEY, CUBBIT_BUCKET)
 - `make test-coverage` — coverage report
 - `make lint` — golangci-lint
 
 ## Uso base
 ```bash
-# Deploy in chiaro
-cubbit-pages deploy ./mio-sito \
-  --bucket mio-bucket \
-  --access-key AKIAIOSFODNN7EXAMPLE \
-  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+# Setup interattivo (salva in ~/.cubbit/pages/config.yaml)
+cubbit-pages setup
 
-# Deploy cifrato
-cubbit-pages deploy ./mio-sito \
-  --bucket mio-bucket \
-  --access-key ... \
-  --secret-key ... \
-  --encrypt \
-  --password "parola-parola-parola"
+# Deploy in chiaro
+cubbit-pages deploy ./mio-sito --bucket mio-bucket
+
+# Deploy cifrato (password da flag)
+cubbit-pages deploy ./mio-sito --bucket mio-bucket --encrypt --password "parola-parola-parola"
+
+# Deploy cifrato (password da stdin)
+echo "parola-parola-parola" | cubbit-pages deploy ./mio-sito --bucket mio-bucket --encrypt
 
 # Mostra snippet bucket policy
 cubbit-pages snippets --bucket mio-bucket
@@ -49,6 +48,9 @@ cubbit-pages snippets --bucket mio-bucket
 - `internal/login/generator.go` — generazione pagina di login e service worker
 - `internal/login/sw.js` — service worker per decryption trasparente di asset .enc
 - `internal/s3/upload.go` — upload con gestione ACL
+- `internal/config/file.go` — load/save `~/.cubbit/pages/config.yaml` (YAML, 0600)
+- `scripts/test-deploy.sh` — integration test: 6 scenari + verifica decrypt con Node.js
+- `scripts/verify-decrypt.mjs` — decryption JS (Web Crypto API) per verifica roundtrip
 
 ## Convenzioni
 - Errori sempre wrappati con `fmt.Errorf("context: %w", err)`
