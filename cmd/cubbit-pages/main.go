@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/marcodellemarche/cubbit-pages/internal/config"
 	"github.com/marcodellemarche/cubbit-pages/internal/deploy"
@@ -23,6 +25,7 @@ func main() {
 		Short: "Deploy static sites to Cubbit S3 with optional AES-256-GCM encryption",
 	}
 
+	rootCmd.AddCommand(setupCmd())
 	rootCmd.AddCommand(deployCmd())
 	rootCmd.AddCommand(snippetsCmd())
 	rootCmd.AddCommand(versionCmd())
@@ -30,6 +33,77 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func setupCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "setup",
+		Short: "Interactive setup wizard — saves credentials to ~/.cubbit/pages/config.yaml",
+		RunE:  runSetup,
+	}
+}
+
+func runSetup(cmd *cobra.Command, args []string) error {
+	scanner := bufio.NewScanner(os.Stdin)
+
+	fmt.Println()
+	fmt.Println("Cubbit Pages Setup")
+	fmt.Println(strings.Repeat("─", 18))
+	fmt.Println()
+
+	fmt.Print("? Access Key: ")
+	if !scanner.Scan() {
+		return fmt.Errorf("aborted")
+	}
+	accessKey := strings.TrimSpace(scanner.Text())
+	if accessKey == "" {
+		return fmt.Errorf("access key is required")
+	}
+
+	secretKey, err := readPassword("? Secret Key: ")
+	if err != nil {
+		return fmt.Errorf("reading secret key: %w", err)
+	}
+	if secretKey == "" {
+		return fmt.Errorf("secret key is required")
+	}
+
+	fmt.Print("? Bucket: ")
+	if !scanner.Scan() {
+		return fmt.Errorf("aborted")
+	}
+	bucket := strings.TrimSpace(scanner.Text())
+	if bucket == "" {
+		return fmt.Errorf("bucket is required")
+	}
+
+	fmt.Printf("? Endpoint [%s]: ", config.DefaultEndpoint)
+	if !scanner.Scan() {
+		return fmt.Errorf("aborted")
+	}
+	endpoint := strings.TrimSpace(scanner.Text())
+	if endpoint == "" {
+		endpoint = config.DefaultEndpoint
+	}
+
+	fc := &config.FileConfig{
+		AccessKey: accessKey,
+		SecretKey: secretKey,
+		Bucket:    bucket,
+		Endpoint:  endpoint,
+	}
+	if err := config.SaveFileConfig(fc); err != nil {
+		return fmt.Errorf("saving config: %w", err)
+	}
+
+	configPath, _ := config.ConfigFilePath()
+	fmt.Printf("\nConfig salvata in %s\n", configPath)
+	fmt.Println()
+	fmt.Println("Pronto! Prova:")
+	fmt.Printf("  cubbit-pages deploy ./mio-sito\n")
+	fmt.Println()
+
+	return nil
 }
 
 func deployCmd() *cobra.Command {

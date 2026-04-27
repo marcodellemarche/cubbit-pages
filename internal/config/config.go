@@ -27,25 +27,44 @@ type Config struct {
 	SourceDir    string
 }
 
-// Resolve fills in missing config values from environment variables.
+// Resolve fills in missing config values from (lowest to highest priority):
+// config file → environment variables → CLI flags (already set on c).
 func (c *Config) Resolve() error {
+	// Load file config as base
+	fileCfg, _ := LoadFileConfig()
+
 	if c.Endpoint == "" {
-		c.Endpoint = os.Getenv("CUBBIT_ENDPOINT")
-	}
-	if c.Endpoint == "" {
-		c.Endpoint = DefaultEndpoint
+		if v := os.Getenv("CUBBIT_ENDPOINT"); v != "" {
+			c.Endpoint = v
+		} else if fileCfg != nil && fileCfg.Endpoint != "" {
+			c.Endpoint = fileCfg.Endpoint
+		} else {
+			c.Endpoint = DefaultEndpoint
+		}
 	}
 
 	if c.AccessKey == "" {
-		c.AccessKey = os.Getenv("CUBBIT_ACCESS_KEY")
+		if v := os.Getenv("CUBBIT_ACCESS_KEY"); v != "" {
+			c.AccessKey = v
+		} else if fileCfg != nil {
+			c.AccessKey = fileCfg.AccessKey
+		}
 	}
 
 	if c.SecretKey == "" {
-		c.SecretKey = os.Getenv("CUBBIT_SECRET_KEY")
+		if v := os.Getenv("CUBBIT_SECRET_KEY"); v != "" {
+			c.SecretKey = v
+		} else if fileCfg != nil {
+			c.SecretKey = fileCfg.SecretKey
+		}
 	}
 
 	if c.Bucket == "" {
-		c.Bucket = os.Getenv("CUBBIT_BUCKET")
+		if v := os.Getenv("CUBBIT_BUCKET"); v != "" {
+			c.Bucket = v
+		} else if fileCfg != nil {
+			c.Bucket = fileCfg.Bucket
+		}
 	}
 
 	if c.Concurrency <= 0 {

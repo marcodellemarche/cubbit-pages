@@ -1,0 +1,106 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: make build
+
+      - name: Start MinIO
+        run: |
+          docker run -d \
+            --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+
+          # Wait for MinIO to be ready
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            echo "Waiting for MinIO... ($i)"
+            sleep 2
+          done
+
+      - name: Create test bucket
+        run: |
+          curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+          chmod +x /usr/local/bin/mc
+          mc alias set local http://localhost:9000 minioadmin minioadmin
+          mc mb local/pages-test
+
+      - name: Run integration tests
+        env:
+          CUBBIT_ACCESS_KEY: minioadmin
+          CUBBIT_SECRET_KEY: minioadmin
+        run: |
+          ./scripts/test-deploy.sh \
+            --bucket pages-test \
+            --endpoint http://localhost:9000
+
+  integration-cubbit:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.CUBBIT_ACCESS_KEY != '' }}
+    env:
+      BUCKET: pages-ci-${{ github.run_id }}
+      CUBBIT_ENDPOINT: https://s3.cubbit.eu
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: make build
+
+      - name: Create bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CUBBIT_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CUBBIT_SECRET_KEY }}
+        run: |
+          aws s3api create-bucket \
+            --bucket "$BUCKET" \
+            --endpoint-url "$CUBBIT_ENDPOINT" \
+            --create-bucket-configuration LocationConstraint=eu-west-1
+
+      - name: Run integration tests
+        env:
+          CUBBIT_ACCESS_KEY: ${{ secrets.CUBBIT_ACCESS_KEY }}
+          CUBBIT_SECRET_KEY: ${{ secrets.CUBBIT_SECRET_KEY }}
+        run: |
+          ./scripts/test-deploy.sh \
+            --bucket "$BUCKET" \
+            --endpoint "$CUBBIT_ENDPOINT"
+
+      - name: Delete bucket
+        if: always()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CUBBIT_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CUBBIT_SECRET_KEY }}
+        run: |
+          aws s3 rm "s3://$BUCKET" --recursive \
+            --endpoint-url "$CUBBIT_ENDPOINT"
+          aws s3api delete-bucket \
+            --bucket "$BUCKET" \
+            --endpoint-url "$CUBBIT_ENDPOINT"
