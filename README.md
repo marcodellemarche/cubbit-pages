@@ -41,7 +41,7 @@ make build
 cubbit-pages setup
 ```
 
-This saves credentials to `~/.cubbit/pages/config.yaml` so you don't need to repeat them on every deploy.
+This creates the bucket if it doesn't exist, then saves credentials to `~/.cubbit/pages/config.yaml` so you don't need to repeat them on every deploy.
 
 5. Show the bucket configuration snippets:
 
@@ -175,7 +175,7 @@ This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.)
 
 ### `cubbit-pages setup`
 
-Interactive wizard. Prompts for Access Key, Secret Key, Bucket and Endpoint (optional), then saves to `~/.cubbit/pages/config.yaml` (mode 0600). Credentials loaded by subsequent commands with lowest priority (flags and env override them).
+Interactive wizard. Prompts for Access Key, Secret Key, Endpoint (optional) and Bucket. If the bucket doesn't exist, creates it automatically. Saves to `~/.cubbit/pages/config.yaml` (mode 0600). Credentials loaded by subsequent commands with lowest priority (flags and env override them).
 
 ### `cubbit-pages version`
 

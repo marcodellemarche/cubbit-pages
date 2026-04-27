@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/marcodellemarche/cubbit-pages/internal/config"
 	"github.com/marcodellemarche/cubbit-pages/internal/deploy"
 	"github.com/marcodellemarche/cubbit-pages/internal/snippets"
+	s3client "github.com/marcodellemarche/cubbit-pages/internal/s3"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -60,21 +62,25 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("access key is required")
 	}
 
-	secretKey, err := readPassword("? Secret Key: ")
-	if err != nil {
-		return fmt.Errorf("reading secret key: %w", err)
+	var (
+		secretKey string
+		err       error
+	)
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		secretKey, err = readPassword("? Secret Key: ")
+		if err != nil {
+			return fmt.Errorf("reading secret key: %w", err)
+		}
+	} else {
+		fmt.Print("? Secret Key: ")
+		if !scanner.Scan() {
+			return fmt.Errorf("aborted")
+		}
+		secretKey = strings.TrimSpace(scanner.Text())
 	}
 	if secretKey == "" {
 		return fmt.Errorf("secret key is required")
-	}
-
-	fmt.Print("? Bucket: ")
-	if !scanner.Scan() {
-		return fmt.Errorf("aborted")
-	}
-	bucket := strings.TrimSpace(scanner.Text())
-	if bucket == "" {
-		return fmt.Errorf("bucket is required")
 	}
 
 	fmt.Printf("? Endpoint [%s]: ", config.DefaultEndpoint)
@@ -86,6 +92,66 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		endpoint = config.DefaultEndpoint
 	}
 
+	// Create a throwaway client (no bucket yet) to probe/create bucket
+	client, err := s3client.NewClient(endpoint, accessKey, secretKey, config.DefaultRegion, "probe")
+	if err != nil {
+		return fmt.Errorf("invalid credentials: %w", err)
+	}
+
+	ctx := context.Background()
+	var bucket string
+	for {
+		fmt.Print("? Bucket: ")
+		if !scanner.Scan() {
+			return fmt.Errorf("aborted")
+		}
+		bucket = strings.TrimSpace(scanner.Text())
+		if bucket == "" {
+			fmt.Println("  Il nome del bucket non può essere vuoto.")
+			continue
+		}
+
+		fmt.Printf("\n  Verifica bucket %q...", bucket)
+
+		switch client.ProbeBucket(ctx, bucket) {
+		case s3client.BucketExists:
+			fmt.Println()
+			fmt.Print("  Bucket già esistente. Usarlo? (Y/n) ")
+			if !scanner.Scan() {
+				return fmt.Errorf("aborted")
+			}
+			answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
+			fmt.Println()
+			if answer == "" || answer == "y" || answer == "yes" {
+				goto bucketOK
+			}
+			continue
+
+		case s3client.BucketForbidden:
+			fmt.Println("\n  ✗ Bucket esistente ma non tuo. Scegli un altro nome.\n")
+			continue
+
+		case s3client.BucketNotFound:
+			fmt.Printf(" creazione in corso...")
+			if err := client.CreateBucket(ctx, bucket, config.DefaultRegion); err != nil {
+				es := err.Error()
+				if strings.Contains(es, "BucketAlreadyExists") {
+					fmt.Println("\n  ✗ Bucket già esistente e non tuo. Scegli un altro nome.\n")
+					continue
+				}
+				if strings.Contains(es, "InvalidBucketName") {
+					fmt.Printf("\n  ✗ Nome bucket non valido: %s\n\n", bucket)
+					continue
+				}
+				fmt.Printf("\n  ✗ Errore: %v\n\n", err)
+				continue
+			}
+			fmt.Println(" ✓\n")
+			goto bucketOK
+		}
+	}
+
+bucketOK:
 	fc := &config.FileConfig{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
@@ -97,10 +163,10 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	configPath, _ := config.ConfigFilePath()
-	fmt.Printf("\nConfig salvata in %s\n", configPath)
+	fmt.Printf("  Config salvata in %s\n", configPath)
 	fmt.Println()
-	fmt.Println("Pronto! Prova:")
-	fmt.Printf("  cubbit-pages deploy ./mio-sito\n")
+	fmt.Println("  Pronto! Prova:")
+	fmt.Printf("    cubbit-pages deploy ./mio-sito\n")
 	fmt.Println()
 
 	return nil
