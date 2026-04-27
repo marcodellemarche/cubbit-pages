@@ -20,7 +20,7 @@ CLI Go per deploy di siti statici su Cubbit S3, con cifratura opzionale AES-256-
 
 ## Uso base
 ```bash
-# Setup interattivo (salva in ~/.cubbit/pages/config.yaml)
+# Setup interattivo (crea il bucket se non esiste, salva in ~/.cubbit/pages/config.yaml)
 cubbit-pages setup
 
 # Deploy in chiaro
