@@ -57,10 +57,10 @@ jobs:
 
   integration-cubbit:
     runs-on: ubuntu-latest
-    if: ${{ secrets.CUBBIT_ACCESS_KEY != '' }}
     env:
       BUCKET: pages-ci-${{ github.run_id }}
       CUBBIT_ENDPOINT: https://s3.cubbit.eu
+      HAS_SECRETS: ${{ secrets.CUBBIT_ACCESS_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -75,6 +75,7 @@ jobs:
         run: make build
 
       - name: Create bucket
+        if: env.HAS_SECRETS == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.CUBBIT_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CUBBIT_SECRET_KEY }}
@@ -85,6 +86,7 @@ jobs:
             --create-bucket-configuration LocationConstraint=eu-west-1
 
       - name: Run integration tests
+        if: env.HAS_SECRETS == 'true'
         env:
           CUBBIT_ACCESS_KEY: ${{ secrets.CUBBIT_ACCESS_KEY }}
           CUBBIT_SECRET_KEY: ${{ secrets.CUBBIT_SECRET_KEY }}
@@ -94,7 +96,7 @@ jobs:
             --endpoint "$CUBBIT_ENDPOINT"
 
       - name: Delete bucket
-        if: always()
+        if: always() && env.HAS_SECRETS == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.CUBBIT_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CUBBIT_SECRET_KEY }}
