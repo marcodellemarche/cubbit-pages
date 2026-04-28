@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 const (
@@ -74,6 +75,12 @@ func (c *Config) Resolve() error {
 	if c.Region == "" {
 		c.Region = DefaultRegion
 	}
+
+	// Normalize the prefix to a canonical form so downstream consumers can join it
+	// with a constant separator. Without this, a user-supplied "foo/" combined with
+	// the uploader's `prefix + "/" + key` join produces "foo//key" (double slash) —
+	// a distinct, unreachable S3 key from the "foo/key" the published URL points to.
+	c.Prefix = strings.Trim(c.Prefix, "/")
 
 	return c.Validate()
 }
