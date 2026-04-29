@@ -77,10 +77,6 @@ func (c *Config) Resolve() error {
 		c.Region = DefaultRegion
 	}
 
-	if c.Locale == "" {
-		c.Locale = "en"
-	}
-
 	// Normalize the prefix to a canonical form so downstream consumers can join it
 	// with a constant separator. Without this, a user-supplied "foo/" combined with
 	// the uploader's `prefix + "/" + key` join produces "foo//key" (double slash) —

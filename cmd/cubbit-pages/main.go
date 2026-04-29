@@ -266,7 +266,7 @@ func deployCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&cfg.DryRun, "dry-run", false, "show what would be uploaded without uploading")
 	cmd.Flags().IntVar(&cfg.Concurrency, "concurrency", config.DefaultConcurrency, "number of parallel uploads")
 	cmd.Flags().StringVar(&cfg.Prefix, "prefix", "", "S3 key prefix for all files")
-	cmd.Flags().StringVar(&cfg.Locale, "locale", "en", "login page locale (en, it)")
+	cmd.Flags().StringVar(&cfg.Locale, "locale", "en", fmt.Sprintf("login page locale (%s)", strings.Join(login.KnownLocales(), ", ")))
 
 	return cmd
 }
