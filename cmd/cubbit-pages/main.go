@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/marcodellemarche/cubbit-pages/internal/config"
@@ -32,6 +33,7 @@ func main() {
 	rootCmd.AddCommand(deployCmd())
 	rootCmd.AddCommand(snippetsCmd())
 	rootCmd.AddCommand(versionCmd())
+	rootCmd.AddCommand(addLocaleCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -319,6 +321,120 @@ func versionCmd() *cobra.Command {
 			fmt.Printf("  built:   %s\n", BuildDate)
 		},
 	}
+}
+
+func addLocaleCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "add-locale <code>",
+		Short: "Interactive wizard to add a new login page locale",
+		Long: `Prompts for each field of the login page in turn, then appends
+a new entry to the internal locales map.
+
+Example:
+  cubbit-pages add-locale fr`,
+		Args: cobra.ExactArgs(1),
+		RunE: runAddLocale,
+	}
+}
+
+func runAddLocale(cmd *cobra.Command, args []string) error {
+	code := strings.TrimSpace(strings.ToLower(args[0]))
+
+	if matched, _ := regexp.MatchString(`^[a-z]{2,5}$`, code); !matched {
+		return fmt.Errorf("locale code must be 2-5 lowercase letters, got %q", code)
+	}
+
+	if login.IsKnownLocale(code) {
+		return fmt.Errorf("locale %q already exists", code)
+	}
+
+	ref := login.LocaleStrings("en")
+	scanner := bufio.NewScanner(os.Stdin)
+
+	fmt.Println()
+	fmt.Printf("Adding locale %q...\n", code)
+	fmt.Println("(Press Enter to keep the English default)")
+	fmt.Println()
+
+	var s login.Strings
+	s.Lang = code
+
+	fields := []struct {
+		prompt string
+		ref    string
+		target *string
+	}{
+		{"Title", ref.Title, &s.Title},
+		{"Subtitle", ref.Subtitle, &s.Subtitle},
+		{"PasswordLabel", ref.PasswordLabel, &s.PasswordLabel},
+		{"PasswordPlaceholder", ref.PasswordPlaceholder, &s.PasswordPlaceholder},
+		{"ToggleAriaLabel", ref.ToggleAriaLabel, &s.ToggleAriaLabel},
+		{"SubmitText", ref.SubmitText, &s.SubmitText},
+		{"ErrorText", ref.ErrorText, &s.ErrorText},
+		{"NetworkErrorText", ref.NetworkErrorText, &s.NetworkErrorText},
+		{"FooterText", ref.FooterText, &s.FooterText},
+	}
+
+	for _, f := range fields {
+		for attempts := 0; attempts < 3; attempts++ {
+			fmt.Printf("%s [%s]: ", f.prompt, f.ref)
+			if !scanner.Scan() {
+				return fmt.Errorf("aborted")
+			}
+			input := strings.TrimSpace(scanner.Text())
+			if input == "" && attempts < 2 {
+				fmt.Println("  Field cannot be empty. Try again.")
+				continue
+			}
+			if input == "" {
+				return fmt.Errorf("field %q cannot be empty", f.prompt)
+			}
+			*f.target = input
+			break
+		}
+	}
+
+	srcPath := "internal/login/locales.go"
+	src, err := os.ReadFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", srcPath, err)
+	}
+
+	content := string(src)
+
+	lastBrace := strings.LastIndex(content, "\n}")
+	if lastBrace == -1 {
+		return fmt.Errorf("cannot find map closing brace in %s", srcPath)
+	}
+
+	var entryBuf strings.Builder
+	entryBuf.WriteString("\t\"")
+	entryBuf.WriteString(code)
+	entryBuf.WriteString("\": {\n")
+	fmt.Fprintf(&entryBuf, "\t\tLang:                %q,\n", s.Lang)
+	fmt.Fprintf(&entryBuf, "\t\tTitle:               %q,\n", s.Title)
+	fmt.Fprintf(&entryBuf, "\t\tSubtitle:            %q,\n", s.Subtitle)
+	fmt.Fprintf(&entryBuf, "\t\tPasswordLabel:       %q,\n", s.PasswordLabel)
+	fmt.Fprintf(&entryBuf, "\t\tPasswordPlaceholder: %q,\n", s.PasswordPlaceholder)
+	fmt.Fprintf(&entryBuf, "\t\tToggleAriaLabel:     %q,\n", s.ToggleAriaLabel)
+	fmt.Fprintf(&entryBuf, "\t\tSubmitText:          %q,\n", s.SubmitText)
+	fmt.Fprintf(&entryBuf, "\t\tErrorText:           %q,\n", s.ErrorText)
+	fmt.Fprintf(&entryBuf, "\t\tNetworkErrorText:    %q,\n", s.NetworkErrorText)
+	fmt.Fprintf(&entryBuf, "\t\tFooterText:          %q,\n", s.FooterText)
+	entryBuf.WriteString("\t},\n")
+
+	newContent := content[:lastBrace] + "\n" + entryBuf.String() + content[lastBrace:]
+
+	if err := os.WriteFile(srcPath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", srcPath, err)
+	}
+
+	fmt.Println()
+	fmt.Printf("Locale %q added to %s\n", code, srcPath)
+	fmt.Println("Run 'make test' to verify all fields are populated.")
+	fmt.Println()
+
+	return nil
 }
 
 func readPassword(prompt string) (string, error) {

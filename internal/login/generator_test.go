@@ -157,7 +157,7 @@ func extractJSVar(source, varName string) (int, bool) {
 		return 0, false
 	}
 	var val int
-	fmt.Sscanf(m[1], "%d", &val)
+				_, _ = fmt.Sscanf(m[1], "%d", &val)
 	return val, true
 }
 
@@ -173,7 +173,7 @@ func extractJSMagicArray(source string) []byte {
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		var val int
-		fmt.Sscanf(p, "0x%x", &val)
+		_, _ = fmt.Sscanf(p, "0x%x", &val)
 		result = append(result, byte(val))
 	}
 	return result
