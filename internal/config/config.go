@@ -26,6 +26,7 @@ type Config struct {
 	Concurrency  int
 	Prefix       string
 	SourceDir    string
+	Locale       string
 }
 
 // Resolve fills in missing config values from (lowest to highest priority):
@@ -74,6 +75,10 @@ func (c *Config) Resolve() error {
 
 	if c.Region == "" {
 		c.Region = DefaultRegion
+	}
+
+	if c.Locale == "" {
+		c.Locale = "en"
 	}
 
 	// Normalize the prefix to a canonical form so downstream consumers can join it

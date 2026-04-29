@@ -9,6 +9,7 @@ import (
 
 	"github.com/marcodellemarche/cubbit-pages/internal/config"
 	"github.com/marcodellemarche/cubbit-pages/internal/deploy"
+	"github.com/marcodellemarche/cubbit-pages/internal/login"
 	"github.com/marcodellemarche/cubbit-pages/internal/snippets"
 	s3client "github.com/marcodellemarche/cubbit-pages/internal/s3"
 	"github.com/spf13/cobra"
@@ -200,6 +201,10 @@ func deployCmd() *cobra.Command {
 				cfg.Password = pwd
 			}
 
+			if cfg.Locale != "" && !login.IsKnownLocale(cfg.Locale) {
+				return fmt.Errorf("unknown locale %q (available: %v)", cfg.Locale, login.KnownLocales())
+			}
+
 			if err := cfg.Resolve(); err != nil {
 				return err
 			}
@@ -228,6 +233,7 @@ func deployCmd() *cobra.Command {
 				DryRun:       cfg.DryRun,
 				Concurrency:  cfg.Concurrency,
 				Prefix:       cfg.Prefix,
+				Locale:       cfg.Locale,
 			}
 
 			result, err := deploy.Run(cmd.Context(), opts)
@@ -258,6 +264,7 @@ func deployCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&cfg.DryRun, "dry-run", false, "show what would be uploaded without uploading")
 	cmd.Flags().IntVar(&cfg.Concurrency, "concurrency", config.DefaultConcurrency, "number of parallel uploads")
 	cmd.Flags().StringVar(&cfg.Prefix, "prefix", "", "S3 key prefix for all files")
+	cmd.Flags().StringVar(&cfg.Locale, "locale", "en", "login page locale (en, it)")
 
 	return cmd
 }
