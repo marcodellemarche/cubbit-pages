@@ -28,6 +28,7 @@ type Options struct {
 	DryRun       bool
 	Concurrency  int
 	Prefix       string
+	Locale       string
 }
 
 // Result holds the result of a deploy operation.
@@ -78,7 +79,7 @@ func runWithUploader(ctx context.Context, files []FileEntry, opts Options, uploa
 
 	if opts.Encrypt {
 		// Generate login page
-		loginHTML := login.GenerateLoginPage()
+		loginHTML := login.GenerateLoginPage(opts.Locale)
 		items = append(items, uploadItem{key: "index.html", data: []byte(loginHTML)})
 
 		// Generate service worker (must be unencrypted and at scope root)

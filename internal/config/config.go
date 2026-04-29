@@ -26,6 +26,7 @@ type Config struct {
 	Concurrency  int
 	Prefix       string
 	SourceDir    string
+	Locale       string
 }
 
 // Resolve fills in missing config values from (lowest to highest priority):

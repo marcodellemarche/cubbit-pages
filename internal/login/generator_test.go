@@ -10,7 +10,7 @@ import (
 // --- Login page tests ---
 
 func TestGenerateLoginPageContainsForm(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 	if !strings.Contains(html, `id="login-form"`) {
 		t.Fatal("login page missing form element")
 	}
@@ -20,14 +20,14 @@ func TestGenerateLoginPageContainsForm(t *testing.T) {
 }
 
 func TestGenerateLoginPageContainsVerifyReference(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 	if !strings.Contains(html, "_verify.enc") {
 		t.Fatal("login page missing reference to _verify.enc")
 	}
 }
 
 func TestGenerateLoginPageContainsDecryptionJS(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 	if !strings.Contains(html, "crypto.subtle") {
 		t.Fatal("login page missing Web Crypto API usage")
 	}
@@ -40,14 +40,14 @@ func TestGenerateLoginPageContainsDecryptionJS(t *testing.T) {
 }
 
 func TestGenerateLoginPageContainsLocalStorageKey(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 	if !strings.Contains(html, "cubbitseal_password") {
 		t.Fatal("login page missing localStorage key")
 	}
 }
 
 func TestGenerateLoginPageIsValidHTML(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 	if !strings.HasPrefix(html, "<!DOCTYPE html>") {
 		t.Fatal("login page missing DOCTYPE")
 	}
@@ -124,7 +124,7 @@ func TestGenerateServiceWorkerContainsMIMETypes(t *testing.T) {
 // --- Service worker integration in login/loader ---
 
 func TestGenerateLoginPageContainsServiceWorkerRegistration(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 	if !strings.Contains(html, "serviceWorker") {
 		t.Fatal("login page missing service worker registration")
 	}
@@ -157,7 +157,7 @@ func extractJSVar(source, varName string) (int, bool) {
 		return 0, false
 	}
 	var val int
-	fmt.Sscanf(m[1], "%d", &val)
+				_, _ = fmt.Sscanf(m[1], "%d", &val)
 	return val, true
 }
 
@@ -173,7 +173,7 @@ func extractJSMagicArray(source string) []byte {
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		var val int
-		fmt.Sscanf(p, "0x%x", &val)
+		_, _ = fmt.Sscanf(p, "0x%x", &val)
 		result = append(result, byte(val))
 	}
 	return result
@@ -195,7 +195,7 @@ func TestCryptoConstantsConsistency(t *testing.T) {
 	// Check each JS source that contains crypto constants
 	sources := map[string]string{
 		"sw.js":          GenerateServiceWorker(),
-		"template.html":  GenerateLoginPage(),
+		"template.html":  GenerateLoginPage("en"),
 		"loader.html":    GenerateLoader("test.html.enc"),
 	}
 
@@ -273,7 +273,7 @@ func TestServiceWorkerExcludesCorrectPaths(t *testing.T) {
 // --- Critical: login page registers SW BEFORE loading encrypted page ---
 
 func TestLoginPageSWRegistrationBeforeLoad(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 
 	// ensureServiceWorker must be called before loadEncryptedPage/redirectToTarget
 	swPos := strings.Index(html, "ensureServiceWorker")
@@ -309,7 +309,7 @@ func TestLoaderSWRegistrationBeforeFetch(t *testing.T) {
 // --- Critical: service worker sends password via sw.js register path ---
 
 func TestLoginPageRegistersCorrectSWFile(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 	if !strings.Contains(html, "register('sw.js')") {
 		t.Fatal("login page must register 'sw.js' as service worker")
 	}
@@ -354,7 +354,7 @@ func TestServiceWorkerHandlesClearPassword(t *testing.T) {
 }
 
 func TestLoginPageSendsClearPasswordOnLogout(t *testing.T) {
-	html := GenerateLoginPage()
+	html := GenerateLoginPage("en")
 	if !strings.Contains(html, "CLEAR_PASSWORD") {
 		t.Fatal("login page must send CLEAR_PASSWORD to SW when clearing localStorage")
 	}
@@ -385,5 +385,42 @@ func TestServiceWorkerFetchAndDecryptPattern(t *testing.T) {
 	// Must set Content-Type from original URL
 	if !strings.Contains(js, "getContentType(originalUrl)") {
 		t.Fatal("service worker must infer Content-Type from original URL")
+	}
+}
+
+func TestGenerateLoginPageLocaleSelection(t *testing.T) {
+	en := GenerateLoginPage("en")
+	it := GenerateLoginPage("it")
+
+	if !strings.Contains(en, "Sign in") {
+		t.Fatal("English login page missing 'Sign in'")
+	}
+	if !strings.Contains(it, "Accedi") {
+		t.Fatal("Italian login page missing 'Accedi'")
+	}
+	if !strings.Contains(en, "Protected site") {
+		t.Fatal("English login page missing 'Protected site'")
+	}
+	if !strings.Contains(it, "Sito protetto") {
+		t.Fatal("Italian login page missing 'Sito protetto'")
+	}
+}
+
+func TestGenerateLoginPageUnknownLocaleFallback(t *testing.T) {
+	de := GenerateLoginPage("de")
+	if !strings.Contains(de, "Sign in") {
+		t.Fatal("Unknown locale did not fall back to English")
+	}
+}
+
+func TestGenerateLoginPageSetsLangAttribute(t *testing.T) {
+	en := GenerateLoginPage("en")
+	it := GenerateLoginPage("it")
+
+	if !strings.Contains(en, `lang="en"`) {
+		t.Fatal("English page missing lang=\"en\"")
+	}
+	if !strings.Contains(it, `lang="it"`) {
+		t.Fatal("Italian page missing lang=\"it\"")
 	}
 }
