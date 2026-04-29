@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="{{.Lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Accedi — Cubbit Pages</title>
+<title>{{.Title}}</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--primary:#009EFF;--primary-dark:#0080CC;--bg:#0a0e17;--surface:#111827;--surface-light:#1f2937;--text:#f3f4f6;--text-muted:#9ca3af;--error:#ef4444;--success:#22c55e;--radius:12px}
@@ -47,24 +47,24 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
     <circle cx="24" cy="27.5" r="1.5" fill="#009EFF"/>
    </svg>
    <h1>Cubbit <span>Pages</span></h1>
-   <p>Sito protetto — inserisci la password</p>
+   <p>{{.Subtitle}}</p>
   </div>
   <form id="login-form">
    <div class="field">
-    <label for="password">Password</label>
+    <label for="password">{{.PasswordLabel}}</label>
     <div class="input-wrap">
-     <input type="password" id="password" autocomplete="current-password" placeholder="Inserisci la password" required>
-     <button type="button" class="toggle-pw" aria-label="Mostra password">
+     <input type="password" id="password" autocomplete="current-password" placeholder="{{.PasswordPlaceholder}}" required>
+     <button type="button" class="toggle-pw" aria-label="{{.ToggleAriaLabel}}">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
      </button>
     </div>
    </div>
-   <button type="submit" class="btn" id="submit-btn">Accedi</button>
+   <button type="submit" class="btn" id="submit-btn">{{.SubmitText}}</button>
   </form>
-  <div class="error" id="error-msg">Password non corretta</div>
+  <div class="error" id="error-msg">{{.ErrorText}}</div>
   <div class="spinner" id="spinner"></div>
  </div>
- <div class="footer">Protetto con <a href="https://cubbit.io" target="_blank" rel="noopener">Cubbit</a> Pages</div>
+ <div class="footer">{{.FooterText}}</div>
 </div>
 <script>
 (function(){
@@ -211,7 +211,7 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
       });
     }).catch(function(){
       spinner.classList.remove('show');
-      errorMsg.textContent='Errore di rete — riprova';
+      errorMsg.textContent='{{.NetworkErrorText}}';
       errorMsg.classList.add('show');
       submitBtn.disabled=false;
     });
