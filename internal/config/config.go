@@ -84,6 +84,16 @@ func (c *Config) Resolve() error {
 	// a distinct, unreachable S3 key from the "foo/key" the published URL points to.
 	c.Prefix = strings.Trim(c.Prefix, "/")
 
+	if c.Locale == "" {
+		if v := os.Getenv("CUBBIT_LOCALE"); v != "" {
+			c.Locale = v
+		} else if fileCfg != nil && fileCfg.Locale != "" {
+			c.Locale = fileCfg.Locale
+		} else {
+			c.Locale = "en"
+		}
+	}
+
 	return c.Validate()
 }
 

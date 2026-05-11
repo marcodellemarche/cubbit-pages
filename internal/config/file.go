@@ -14,6 +14,7 @@ type FileConfig struct {
 	SecretKey string `yaml:"secret_key"`
 	Bucket    string `yaml:"bucket"`
 	Endpoint  string `yaml:"endpoint"`
+	Locale    string `yaml:"locale,omitempty"`
 }
 
 // ConfigDir returns ~/.cubbit/pages/.
