@@ -143,6 +143,11 @@ func (c *Config) ResolveOpen() {
 		}
 	}
 
+	// Fall back to the prefix of the last successful deploy when none is given.
+	if c.Prefix == "" && fileCfg != nil && fileCfg.LastDeploy != nil {
+		c.Prefix = fileCfg.LastDeploy.Prefix
+	}
+
 	c.Prefix = strings.Trim(c.Prefix, "/")
 }
 

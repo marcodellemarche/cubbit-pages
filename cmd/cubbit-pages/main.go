@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/marcodellemarche/cubbit-pages/internal/config"
 	"github.com/marcodellemarche/cubbit-pages/internal/deploy"
@@ -35,6 +36,7 @@ func main() {
 	rootCmd.AddCommand(listCmd())
 	rootCmd.AddCommand(deleteCmd())
 	rootCmd.AddCommand(openCmd())
+	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(snippetsCmd())
 	rootCmd.AddCommand(versionCmd())
 
@@ -264,6 +266,21 @@ func deployCmd() *cobra.Command {
 			fmt.Printf("\nDeploy complete: %d file(s) uploaded\n", result.FilesUploaded)
 			fmt.Printf("URL: %s\n", result.SiteURL)
 
+			// Persist last deploy metadata (only if a config file already exists).
+			if !cfg.DryRun {
+				if fc, _ := config.LoadFileConfig(); fc != nil {
+					fc.LastDeploy = &config.LastDeploy{
+						Bucket:    cfg.Bucket,
+						Prefix:    cfg.Prefix,
+						URL:       result.SiteURL,
+						Files:     result.FilesUploaded,
+						Encrypted: cfg.Encrypt,
+						Date:      time.Now().UTC(),
+					}
+					_ = config.SaveFileConfig(fc)
+				}
+			}
+
 			if !cfg.PublicBucket && !cfg.DryRun {
 				fmt.Println("\nNote: files were made public via per-object ACL.")
 				fmt.Println("To use a bucket policy instead, use --public-bucket and apply:")
@@ -337,6 +354,70 @@ func versionCmd() *cobra.Command {
 			fmt.Printf("cubbit-pages %s\n", Version)
 			fmt.Printf("  commit:  %s\n", Commit)
 			fmt.Printf("  built:   %s\n", BuildDate)
+		},
+	}
+}
+
+func statusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show current config and last deploy",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fc, err := config.LoadFileConfig()
+			if err != nil {
+				return fmt.Errorf("reading config: %w", err)
+			}
+
+			configPath, _ := config.ConfigFilePath()
+
+			fmt.Println()
+			fmt.Printf("  Config (%s)\n", configPath)
+			fmt.Println("  " + strings.Repeat("─", 44))
+
+			if fc == nil {
+				fmt.Println("  No config file found. Run `cubbit-pages setup` to get started.")
+				fmt.Println()
+				return nil
+			}
+
+			endpoint := fc.Endpoint
+			if endpoint == "" {
+				endpoint = config.DefaultEndpoint
+			}
+			locale := fc.Locale
+			if locale == "" {
+				locale = "en"
+			}
+			fmt.Printf("  %-12s %s\n", "Bucket:", fc.Bucket)
+			fmt.Printf("  %-12s %s\n", "Endpoint:", endpoint)
+			fmt.Printf("  %-12s %s\n", "Locale:", locale)
+
+			if fc.LastDeploy != nil {
+				ld := fc.LastDeploy
+				mode := "plaintext"
+				if ld.Encrypted {
+					mode = "encrypted (AES-256-GCM)"
+				}
+				prefix := ld.Prefix
+				if prefix == "" {
+					prefix = "(root)"
+				}
+				fmt.Println()
+				fmt.Println("  Last deploy")
+				fmt.Println("  " + strings.Repeat("─", 44))
+				fmt.Printf("  %-12s %s\n", "Bucket:", ld.Bucket)
+				fmt.Printf("  %-12s %s\n", "Prefix:", prefix)
+				fmt.Printf("  %-12s %d\n", "Files:", ld.Files)
+				fmt.Printf("  %-12s %s\n", "Mode:", mode)
+				fmt.Printf("  %-12s %s\n", "Date:", ld.Date.Local().Format("2006-01-02 15:04"))
+				fmt.Printf("  %-12s %s\n", "URL:", ld.URL)
+			} else {
+				fmt.Println()
+				fmt.Println("  No deploy recorded yet. Run `cubbit-pages deploy` to get started.")
+			}
+
+			fmt.Println()
+			return nil
 		},
 	}
 }

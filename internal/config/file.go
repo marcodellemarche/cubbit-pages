@@ -4,17 +4,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
+// LastDeploy holds metadata about the most recent successful deploy.
+type LastDeploy struct {
+	Bucket    string    `yaml:"bucket"`
+	Prefix    string    `yaml:"prefix,omitempty"`
+	URL       string    `yaml:"url"`
+	Files     int       `yaml:"files"`
+	Encrypted bool      `yaml:"encrypted"`
+	Date      time.Time `yaml:"date"`
+}
+
 // FileConfig represents credentials saved in ~/.cubbit/pages/config.yaml.
 type FileConfig struct {
-	AccessKey string `yaml:"access_key"`
-	SecretKey string `yaml:"secret_key"`
-	Bucket    string `yaml:"bucket"`
-	Endpoint  string `yaml:"endpoint"`
-	Locale    string `yaml:"locale,omitempty"`
+	AccessKey  string      `yaml:"access_key"`
+	SecretKey  string      `yaml:"secret_key"`
+	Bucket     string      `yaml:"bucket"`
+	Endpoint   string      `yaml:"endpoint"`
+	Locale     string      `yaml:"locale,omitempty"`
+	LastDeploy *LastDeploy `yaml:"last_deploy,omitempty"`
 }
 
 // ConfigDir returns ~/.cubbit/pages/.
