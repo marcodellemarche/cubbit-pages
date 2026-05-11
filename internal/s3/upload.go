@@ -7,25 +7,36 @@ import (
 	"mime"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-// Uploader handles uploading files to S3.
-type Uploader struct {
-	client      *Client
-	publicACL   bool
-	prefix      string
+// DeployMeta holds metadata written to index.html at deploy time.
+type DeployMeta struct {
+	Encrypted bool
+	Locale    string
+	Version   string
+	Prefix    string
 }
 
-// NewUploader creates a new Uploader.
-func NewUploader(client *Client, publicACL bool, prefix string) *Uploader {
+// Uploader handles uploading files to S3.
+type Uploader struct {
+	client    *Client
+	publicACL bool
+	prefix    string
+	meta      *DeployMeta
+}
+
+// NewUploader creates a new Uploader. meta is optional (nil disables S3 metadata).
+func NewUploader(client *Client, publicACL bool, prefix string, meta *DeployMeta) *Uploader {
 	return &Uploader{
 		client:    client,
 		publicACL: publicACL,
 		prefix:    prefix,
+		meta:      meta,
 	}
 }
 
@@ -44,6 +55,20 @@ func (u *Uploader) Upload(ctx context.Context, key string, data []byte) error {
 		Body:               bytes.NewReader(data),
 		ContentType:        aws.String(contentType),
 		ContentDisposition: aws.String("inline"),
+	}
+
+	if u.meta != nil && key == "index.html" {
+		encrypted := "false"
+		if u.meta.Encrypted {
+			encrypted = "true"
+		}
+		input.Metadata = map[string]string{
+			"cubbit-pages-encrypted":  encrypted,
+			"cubbit-pages-locale":     u.meta.Locale,
+			"cubbit-pages-version":    u.meta.Version,
+			"cubbit-pages-prefix":     u.meta.Prefix,
+			"cubbit-pages-timestamp":  time.Now().UTC().Format(time.RFC3339),
+		}
 	}
 
 	_, err := u.client.S3.PutObject(ctx, input)

@@ -270,6 +270,7 @@ func deployCmd() *cobra.Command {
 				Concurrency:  cfg.Concurrency,
 				Prefix:       cfg.Prefix,
 				Locale:       cfg.Locale,
+				Version:      Version,
 			}
 
 			result, err := deploy.Run(cmd.Context(), opts)
@@ -280,19 +281,21 @@ func deployCmd() *cobra.Command {
 			fmt.Printf("\nDeploy complete: %d file(s) uploaded\n", result.FilesUploaded)
 			fmt.Printf("URL: %s\n", result.SiteURL)
 
-			// Persist last deploy metadata (only if a config file already exists).
+			// Persist last deploy metadata (create config file if it doesn't exist yet).
 			if !cfg.DryRun {
-				if fc, _ := config.LoadFileConfig(); fc != nil {
-					fc.LastDeploy = &config.LastDeploy{
-						Bucket:    cfg.Bucket,
-						Prefix:    cfg.Prefix,
-						URL:       result.SiteURL,
-						Files:     result.FilesUploaded,
-						Encrypted: cfg.Encrypt,
-						Date:      time.Now().UTC(),
-					}
-					_ = config.SaveFileConfig(fc)
+				fc, _ := config.LoadFileConfig()
+				if fc == nil {
+					fc = &config.FileConfig{}
 				}
+				fc.LastDeploy = &config.LastDeploy{
+					Bucket:    cfg.Bucket,
+					Prefix:    cfg.Prefix,
+					URL:       result.SiteURL,
+					Files:     result.FilesUploaded,
+					Encrypted: cfg.Encrypt,
+					Date:      time.Now().UTC(),
+				}
+				_ = config.SaveFileConfig(fc)
 			}
 
 			if !cfg.PublicBucket && !cfg.DryRun {
@@ -373,7 +376,10 @@ func versionCmd() *cobra.Command {
 }
 
 func statusCmd() *cobra.Command {
-	return &cobra.Command{
+	cfg := &config.Config{}
+	var deep bool
+
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show current config and last deploy",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -391,49 +397,107 @@ func statusCmd() *cobra.Command {
 			if fc == nil {
 				fmt.Println("  No config file found. Run `cubbit-pages setup` to get started.")
 				fmt.Println()
+			} else {
+				endpoint := fc.Endpoint
+				if endpoint == "" {
+					endpoint = config.DefaultEndpoint
+				}
+				locale := fc.Locale
+				if locale == "" {
+					locale = "en"
+				}
+				fmt.Printf("  %-12s %s\n", "Bucket:", fc.Bucket)
+				fmt.Printf("  %-12s %s\n", "Endpoint:", endpoint)
+				fmt.Printf("  %-12s %s\n", "Locale:", locale)
+
+				if fc.LastDeploy != nil {
+					ld := fc.LastDeploy
+					mode := "plaintext"
+					if ld.Encrypted {
+						mode = "encrypted (AES-256-GCM)"
+					}
+					prefix := ld.Prefix
+					if prefix == "" {
+						prefix = "(root)"
+					}
+					fmt.Println()
+					fmt.Println("  Last deploy")
+					fmt.Println("  " + strings.Repeat("─", 44))
+					fmt.Printf("  %-12s %s\n", "Bucket:", ld.Bucket)
+					fmt.Printf("  %-12s %s\n", "Prefix:", prefix)
+					fmt.Printf("  %-12s %d\n", "Files:", ld.Files)
+					fmt.Printf("  %-12s %s\n", "Mode:", mode)
+					fmt.Printf("  %-12s %s\n", "Date:", ld.Date.Local().Format("2006-01-02 15:04"))
+					fmt.Printf("  %-12s %s\n", "URL:", ld.URL)
+				} else {
+					fmt.Println()
+					fmt.Println("  No deploy recorded yet. Run `cubbit-pages deploy` to get started.")
+				}
+				fmt.Println()
+			}
+
+			if !deep {
 				return nil
 			}
 
-			endpoint := fc.Endpoint
-			if endpoint == "" {
-				endpoint = config.DefaultEndpoint
+			// --deep: query S3 for full bucket inventory.
+			if err := cfg.Resolve(); err != nil {
+				return fmt.Errorf("--deep requires credentials: %w", err)
 			}
-			locale := fc.Locale
-			if locale == "" {
-				locale = "en"
-			}
-			fmt.Printf("  %-12s %s\n", "Bucket:", fc.Bucket)
-			fmt.Printf("  %-12s %s\n", "Endpoint:", endpoint)
-			fmt.Printf("  %-12s %s\n", "Locale:", locale)
-
-			if fc.LastDeploy != nil {
-				ld := fc.LastDeploy
-				mode := "plaintext"
-				if ld.Encrypted {
-					mode = "encrypted (AES-256-GCM)"
-				}
-				prefix := ld.Prefix
-				if prefix == "" {
-					prefix = "(root)"
-				}
-				fmt.Println()
-				fmt.Println("  Last deploy")
-				fmt.Println("  " + strings.Repeat("─", 44))
-				fmt.Printf("  %-12s %s\n", "Bucket:", ld.Bucket)
-				fmt.Printf("  %-12s %s\n", "Prefix:", prefix)
-				fmt.Printf("  %-12s %d\n", "Files:", ld.Files)
-				fmt.Printf("  %-12s %s\n", "Mode:", mode)
-				fmt.Printf("  %-12s %s\n", "Date:", ld.Date.Local().Format("2006-01-02 15:04"))
-				fmt.Printf("  %-12s %s\n", "URL:", ld.URL)
-			} else {
-				fmt.Println()
-				fmt.Println("  No deploy recorded yet. Run `cubbit-pages deploy` to get started.")
+			client, err := s3client.NewClient(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.Bucket)
+			if err != nil {
+				return err
 			}
 
+			deploys, err := client.DiscoverDeploys(cmd.Context(), cfg.Endpoint)
+			if err != nil {
+				return fmt.Errorf("scanning bucket: %w", err)
+			}
+
+			fmt.Printf("  Bucket inventory: %s", cfg.Bucket)
+			if len(deploys) == 0 {
+				fmt.Println(" (no deploys found)")
+				fmt.Println()
+				return nil
+			}
+			fmt.Printf(" (%d deploy)\n", len(deploys))
+			fmt.Println("  " + strings.Repeat("─", 44))
 			fmt.Println()
+
+			for i, d := range deploys {
+				pfxDisplay := d.Prefix
+				if pfxDisplay == "" {
+					pfxDisplay = "(root)"
+				}
+				mode := "plaintext"
+				if d.Encrypted {
+					mode = "encrypted"
+				}
+				ts := ""
+				if !d.Timestamp.IsZero() {
+					ts = d.Timestamp.Local().Format("2006-01-02 15:04")
+				}
+				meta := ""
+				if !d.HasMetadata {
+					meta = "  (no metadata)"
+				}
+				fmt.Printf("  #%-2d %-20s %3d files  %8s  %-9s  %s%s\n",
+					i+1, pfxDisplay, d.FileCount, formatSize(d.TotalSize), mode, ts, meta)
+				fmt.Printf("      %s\n", d.URL)
+				fmt.Println()
+			}
+
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&deep, "deep", false, "query S3 for full deploy inventory (requires credentials)")
+	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
+	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
+	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
+	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
+
+	return cmd
 }
 
 func openCmd() *cobra.Command {

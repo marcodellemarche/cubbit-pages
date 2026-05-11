@@ -46,8 +46,12 @@ cubbit-pages delete --bucket mio-bucket --prefix weekly/2026-05-11/
 # Apre il sito nel browser (usa il prefix dell'ultimo deploy se --prefix non specificato)
 cubbit-pages open --bucket mio-bucket
 
-# Mostra config corrente + ultimo deploy
+# Mostra config corrente + ultimo deploy (da file locale, veloce, funziona offline)
 cubbit-pages status
+
+# Mostra inventario completo da S3 (tutti i deploy del bucket, anche da macchina nuova)
+cubbit-pages status --deep
+cubbit-pages status --deep --bucket mio-bucket --access-key ... --secret-key ...
 
 # Mostra snippet bucket policy
 cubbit-pages snippets --bucket mio-bucket
@@ -76,17 +80,20 @@ cubbit-pages snippets --bucket mio-bucket
 - `delete` senza `--prefix`: warning su stderr, exit 1 su abort (non 0)
 - `list`/`delete`: prefix normalizzato con `strings.Trim` (stessa logica di deploy)
 - Output deploy: dimensioni leggibili (KB/MB), ordine deterministico (serializzato dopo `wg.Wait()`)
-- `last_deploy` salvato in `~/.cubbit/pages/config.yaml` dopo ogni deploy non-dry-run riuscito
+- `last_deploy` salvato in `~/.cubbit/pages/config.yaml` dopo ogni deploy non-dry-run riuscito, anche se `setup` non è mai stato eseguito (crea il file se non esiste)
+- Al deploy, `index.html` riceve 5 header S3 `x-amz-meta-cubbit-pages-*`: `encrypted`, `locale`, `version`, `prefix`, `timestamp`
+- `status --deep` fa 1 ListObjects + 1 HeadObject per deploy (O(N) API call); raggruppa i file per prefix, legge metadati, mostra inventario ordinato per data; funziona senza config locale passando credenziali via flag
+- Deploy senza metadati (pre-v0.5.0) mostrano `(no metadata)` con fallback su LastModified da ListObjects
 - Messaggi di errore contestuali con suggerimento del comando/flag corretto
 
 ## File chiave
 - `internal/crypto/crypto.go` — logica AES-256-GCM
-- `internal/deploy/deploy.go` — orchestrazione deploy; `formatSize()`, `siteURL()`, `dryRun()`
+- `internal/deploy/deploy.go` — orchestrazione deploy; `formatSize()`, `siteURL()`, `dryRun()`; `Options.Version` passa al metadata S3
 - `internal/login/generator.go` — generazione pagina di login e service worker (usa `html/template`)
 - `internal/login/locales.go` — struct `Strings`, map `locales` (en/it), `KnownLocales()`, `LocaleStrings()`, `IsKnownLocale()`
 - `internal/login/sw.js` — service worker per decryption trasparente di asset .enc
-- `internal/s3/upload.go` — upload con gestione ACL
-- `internal/s3/client.go` — client S3, `ListObjects` (paginato), `DeleteObjects` (batch 1000), `HeadBucket`
+- `internal/s3/upload.go` — upload con gestione ACL; `DeployMeta` struct; metadata S3 iniettati su `index.html`
+- `internal/s3/client.go` — client S3, `ListObjects` (paginato), `DeleteObjects` (batch 1000), `HeadBucket`; `DiscoverDeploys()` per status --deep; `buildSiteURL()`
 - `internal/config/config.go` — `Resolve()`, `ResolveOpen()`, `Validate()`, `SiteURL()`
 - `internal/config/file.go` — load/save `~/.cubbit/pages/config.yaml`; struct `FileConfig` con `LastDeploy`
 - `scripts/add-locale.go` — wizard interattivo per aggiungere locale (build tag `ignore`, solo `go run`/`make add-locale`)

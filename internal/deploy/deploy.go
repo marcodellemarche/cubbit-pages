@@ -55,6 +55,7 @@ type Options struct {
 	Concurrency  int
 	Prefix       string
 	Locale       string
+	Version      string
 }
 
 // Result holds the result of a deploy operation.
@@ -88,7 +89,13 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("creating S3 client: %w", err)
 	}
 
-	uploader := s3client.NewUploader(client, !opts.PublicBucket, opts.Prefix)
+	meta := &s3client.DeployMeta{
+		Encrypted: opts.Encrypt,
+		Locale:    opts.Locale,
+		Version:   opts.Version,
+		Prefix:    opts.Prefix,
+	}
+	uploader := s3client.NewUploader(client, !opts.PublicBucket, opts.Prefix, meta)
 	uploadFn := uploader.Upload
 
 	return runWithUploader(ctx, files, opts, uploadFn)

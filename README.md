@@ -145,6 +145,36 @@ cubbit-pages status
   URL:         https://my-bucket.s3.cubbit.eu/weekly/2026-05-11/index.html
 ```
 
+### Full bucket inventory (multi-machine, CI/CD)
+
+Add `--deep` to query S3 directly and list all deploys in the bucket — useful on a new machine without a local config file, or to verify CI/CD deploys:
+
+```bash
+cubbit-pages status --deep
+# credentials loaded from config file, or pass explicitly:
+cubbit-pages status --deep --bucket my-bucket --access-key ... --secret-key ...
+```
+
+```
+  Config (~/.cubbit/pages/config.yaml)
+  ────────────────────────────────────────────
+  Bucket:      my-bucket
+  ...
+
+  Bucket inventory: my-bucket (2 deploy)
+  ────────────────────────────────────────────
+
+  #1  demo-backup          7 files   142.3 KB  encrypted   2026-05-11 15:10
+      https://my-bucket.s3.cubbit.eu/demo-backup/index.html
+
+  #2  demo                 7 files   142.3 KB  encrypted   2026-05-11 14:32
+      https://my-bucket.s3.cubbit.eu/demo/index.html
+```
+
+Deploy metadata (encryption mode, locale, CLI version, timestamp) is stored as S3 object metadata on `index.html` at deploy time and read back on demand. Deploys made before v0.5.0 show `(no metadata)`.
+
+The `last_deploy` in `~/.cubbit/pages/config.yaml` is now always written after every successful deploy, even if `setup` was never run.
+
 ## GitHub Action
 
 Cubbit Pages ships as a reusable GitHub Action. Drop it into any workflow:
@@ -224,7 +254,15 @@ Interactive wizard. Prompts for Access Key, Secret Key, Endpoint, Bucket, and lo
 
 ### `cubbit-pages status`
 
-Shows the current config file contents and metadata about the last successful deploy (bucket, prefix, URL, file count, encryption mode, date).
+| Flag | Description |
+|------|-------------|
+| `--deep` | Query S3 for full deploy inventory (requires credentials) |
+| `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) — needed for `--deep` without config file |
+| `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
+| `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
+| `--endpoint` | S3 endpoint |
+
+Without `--deep`: reads from `~/.cubbit/pages/config.yaml` (fast, offline). With `--deep`: does 1 ListObjects + 1 HeadObject per deploy found; shows full inventory from S3.
 
 ### `cubbit-pages list`
 

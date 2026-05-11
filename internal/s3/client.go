@@ -3,6 +3,8 @@ package s3
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +13,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
+
+// DeployInfo holds discovered metadata about a deploy found in the bucket.
+type DeployInfo struct {
+	Prefix      string
+	Encrypted   bool
+	Locale      string
+	Version     string
+	Timestamp   time.Time
+	FileCount   int
+	TotalSize   int64
+	URL         string
+	HasMetadata bool
+}
 
 // ObjectInfo holds metadata for a single S3 object.
 type ObjectInfo struct {
@@ -134,6 +149,138 @@ func (c *Client) ListObjects(ctx context.Context, prefix string) ([]ObjectInfo, 
 	}
 
 	return objects, nil
+}
+
+// DiscoverDeploys scans the bucket for deploy entry points (index.html files)
+// and reads their cubbit-pages metadata to build an inventory of all deploys.
+func (c *Client) DiscoverDeploys(ctx context.Context, endpoint string) ([]DeployInfo, error) {
+	objects, err := c.ListObjects(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// Find all prefixes that have an index.html (deploy entry points).
+	prefixes := map[string]bool{}
+	for _, obj := range objects {
+		if obj.Key == "index.html" {
+			prefixes[""] = true
+		} else if strings.HasSuffix(obj.Key, "/index.html") {
+			prefixes[strings.TrimSuffix(obj.Key, "/index.html")] = true
+		}
+	}
+	if len(prefixes) == 0 {
+		return nil, nil
+	}
+
+	// Count files and sizes per prefix.
+	type stats struct {
+		count int
+		size  int64
+	}
+	prefixStats := map[string]stats{}
+	for _, obj := range objects {
+		assigned := false
+		for pfx := range prefixes {
+			if pfx == "" {
+				continue
+			}
+			if strings.HasPrefix(obj.Key, pfx+"/") {
+				s := prefixStats[pfx]
+				s.count++
+				s.size += obj.Size
+				prefixStats[pfx] = s
+				assigned = true
+				break
+			}
+		}
+		if !assigned && prefixes[""] {
+			// Assign to root only if not claimed by a named prefix.
+			belongsToRoot := true
+			for pfx := range prefixes {
+				if pfx != "" && strings.HasPrefix(obj.Key, pfx+"/") {
+					belongsToRoot = false
+					break
+				}
+			}
+			if belongsToRoot {
+				s := prefixStats[""]
+				s.count++
+				s.size += obj.Size
+				prefixStats[""] = s
+			}
+		}
+	}
+
+	// HeadObject on each index.html to retrieve deploy metadata.
+	var deploys []DeployInfo
+	for pfx := range prefixes {
+		indexKey := "index.html"
+		if pfx != "" {
+			indexKey = pfx + "/index.html"
+		}
+
+		info := DeployInfo{
+			Prefix: pfx,
+			URL:    buildSiteURL(endpoint, c.Bucket, pfx),
+		}
+		if st, ok := prefixStats[pfx]; ok {
+			info.FileCount = st.count
+			info.TotalSize = st.size
+		}
+
+		head, err := c.S3.HeadObject(ctx, &s3.HeadObjectInput{
+			Bucket: aws.String(c.Bucket),
+			Key:    aws.String(indexKey),
+		})
+		if err == nil {
+			if v := head.Metadata["cubbit-pages-encrypted"]; v == "true" {
+				info.Encrypted = true
+				info.HasMetadata = true
+			} else if _, ok := head.Metadata["cubbit-pages-timestamp"]; ok {
+				info.HasMetadata = true
+			}
+			if v := head.Metadata["cubbit-pages-locale"]; v != "" {
+				info.Locale = v
+			}
+			if v := head.Metadata["cubbit-pages-version"]; v != "" {
+				info.Version = v
+			}
+			if v := head.Metadata["cubbit-pages-timestamp"]; v != "" {
+				info.Timestamp, _ = time.Parse(time.RFC3339, v)
+			}
+			if info.Timestamp.IsZero() && head.LastModified != nil {
+				info.Timestamp = *head.LastModified
+			}
+		} else {
+			// Fallback: use LastModified from ListObjects.
+			for _, obj := range objects {
+				if obj.Key == indexKey {
+					info.Timestamp = obj.LastModified
+					break
+				}
+			}
+		}
+
+		deploys = append(deploys, info)
+	}
+
+	sort.Slice(deploys, func(i, j int) bool {
+		return deploys[i].Timestamp.After(deploys[j].Timestamp)
+	})
+
+	return deploys, nil
+}
+
+func buildSiteURL(endpoint, bucket, prefix string) string {
+	pfx := ""
+	if prefix != "" {
+		pfx = prefix + "/"
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" || u.Port() != "" {
+		return fmt.Sprintf("%s/%s/%sindex.html", endpoint, bucket, pfx)
+	}
+	return fmt.Sprintf("%s://%s.%s/%sindex.html", u.Scheme, bucket, u.Host, pfx)
 }
 
 // DeleteObjects deletes the given keys from the bucket in batches of 1000.
