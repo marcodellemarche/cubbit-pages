@@ -111,7 +111,8 @@ func (c *Config) SiteURL() string {
 		prefix = c.Prefix + "/"
 	}
 	u, err := url.Parse(c.Endpoint)
-	if err != nil || u.Host == "" {
+	if err != nil || u.Host == "" || u.Port() != "" {
+		// Explicit port → local/custom endpoint (e.g. MinIO) — use path-style
 		return fmt.Sprintf("%s/%s/%sindex.html", c.Endpoint, c.Bucket, prefix)
 	}
 	return fmt.Sprintf("%s://%s.%s/%sindex.html", u.Scheme, c.Bucket, u.Host, prefix)
