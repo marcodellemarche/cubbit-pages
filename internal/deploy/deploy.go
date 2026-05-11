@@ -3,6 +3,7 @@ package deploy
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,18 @@ import (
 	"github.com/marcodellemarche/cubbit-pages/internal/login"
 	s3client "github.com/marcodellemarche/cubbit-pages/internal/s3"
 )
+
+func siteURL(endpoint, bucket, prefix string) string {
+	pfx := ""
+	if prefix != "" {
+		pfx = prefix + "/"
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" || u.Port() != "" {
+		return fmt.Sprintf("%s/%s/%sindex.html", endpoint, bucket, pfx)
+	}
+	return fmt.Sprintf("%s://%s.%s/%sindex.html", u.Scheme, bucket, u.Host, pfx)
+}
 
 // Options configures a deploy operation.
 type Options struct {
@@ -166,15 +179,9 @@ func runWithUploader(ctx context.Context, files []FileEntry, opts Options, uploa
 		return nil, fmt.Errorf("upload errors: %v", errs)
 	}
 
-	prefix := ""
-	if opts.Prefix != "" {
-		prefix = opts.Prefix + "/"
-	}
-	siteURL := fmt.Sprintf("%s/%s/%sindex.html", opts.Endpoint, opts.Bucket, prefix)
-
 	return &Result{
 		FilesUploaded: int(uploaded),
-		SiteURL:       siteURL,
+		SiteURL:       siteURL(opts.Endpoint, opts.Bucket, opts.Prefix),
 		Files:         uploadedFiles,
 	}, nil
 }
@@ -205,14 +212,9 @@ func dryRun(files []FileEntry, opts Options) (*Result, error) {
 		}
 	}
 
-	prefix := ""
-	if opts.Prefix != "" {
-		prefix = opts.Prefix + "/"
-	}
-
 	return &Result{
 		FilesUploaded: 0,
-		SiteURL:       fmt.Sprintf("%s/%s/%sindex.html", opts.Endpoint, opts.Bucket, prefix),
+		SiteURL:       siteURL(opts.Endpoint, opts.Bucket, opts.Prefix),
 		Files:         resultFiles,
 	}, nil
 }
