@@ -40,6 +40,9 @@ cubbit-pages list --bucket mio-bucket --prefix weekly/2026-05-11/
 # Cancella file dal bucket (chiede conferma)
 cubbit-pages delete --bucket mio-bucket --prefix weekly/2026-05-11/
 
+# Apre il sito nel browser
+cubbit-pages open --bucket mio-bucket
+
 # Mostra snippet bucket policy
 cubbit-pages snippets --bucket mio-bucket
 ```
@@ -49,6 +52,7 @@ cubbit-pages snippets --bucket mio-bucket
 - `CUBBIT_SECRET_KEY`
 - `CUBBIT_BUCKET`
 - `CUBBIT_ENDPOINT` (default: https://s3.cubbit.eu)
+- `CUBBIT_LOCALE` (default: en)
 
 ## File chiave
 - `internal/crypto/crypto.go` — logica AES-256-GCM
