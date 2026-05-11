@@ -15,6 +15,19 @@ import (
 	s3client "github.com/marcodellemarche/cubbit-pages/internal/s3"
 )
 
+func formatSize(n int) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := unit, 0
+	for v := n / unit; v >= unit; v /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
 func siteURL(endpoint, bucket, prefix string) string {
 	pfx := ""
 	if prefix != "" {
@@ -177,7 +190,7 @@ func runWithUploader(ctx context.Context, files []FileEntry, opts Options, uploa
 		if r.err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", r.key, r.err))
 		} else {
-			fmt.Printf("  %-50s %d bytes\n", r.key, r.size)
+			fmt.Printf("  %-50s %s\n", r.key, formatSize(r.size))
 			uploadedFiles = append(uploadedFiles, r.key)
 		}
 	}
@@ -194,29 +207,55 @@ func runWithUploader(ctx context.Context, files []FileEntry, opts Options, uploa
 }
 
 // dryRun simulates a deploy without uploading.
+// Prints in the same format as a real deploy, with a [dry] marker.
 func dryRun(files []FileEntry, opts Options) (*Result, error) {
-	var resultFiles []string
+	type dryItem struct {
+		key  string
+		size int
+	}
+	var items []dryItem
 
 	if opts.Encrypt {
-		resultFiles = append(resultFiles, "index.html")
-		resultFiles = append(resultFiles, "sw.js")
-		resultFiles = append(resultFiles, "_verify.enc")
+		loginHTML := login.GenerateLoginPage(opts.Locale)
+		items = append(items, dryItem{"index.html", len(loginHTML)})
+
+		swJS := login.GenerateServiceWorker()
+		items = append(items, dryItem{"sw.js", len(swJS)})
+
+		canary, err := crypto.EncryptCanary(opts.Password)
+		if err != nil {
+			return nil, fmt.Errorf("creating canary: %w", err)
+		}
+		items = append(items, dryItem{"_verify.enc", len(canary)})
 
 		for _, f := range files {
+			data, err := os.ReadFile(f.AbsPath)
+			if err != nil {
+				return nil, fmt.Errorf("reading %s: %w", f.RelPath, err)
+			}
 			encKey := f.RelPath + ".enc"
-			resultFiles = append(resultFiles, encKey)
-			fmt.Printf("  [dry-run] %s → %s (encrypted)\n", f.RelPath, encKey)
+			// Encrypted size = plaintext + HEADER_LEN(33) + GCM tag(16)
+			items = append(items, dryItem{encKey, len(data) + 49})
 
 			if isHTMLFile(f.RelPath) && f.RelPath != "index.html" {
-				resultFiles = append(resultFiles, f.RelPath)
-				fmt.Printf("  [dry-run] %s (loader)\n", f.RelPath)
+				loader := login.GenerateLoader(encKey)
+				items = append(items, dryItem{f.RelPath, len(loader)})
 			}
 		}
 	} else {
 		for _, f := range files {
-			resultFiles = append(resultFiles, f.RelPath)
-			fmt.Printf("  [dry-run] %s\n", f.RelPath)
+			data, err := os.ReadFile(f.AbsPath)
+			if err != nil {
+				return nil, fmt.Errorf("reading %s: %w", f.RelPath, err)
+			}
+			items = append(items, dryItem{f.RelPath, len(data)})
 		}
+	}
+
+	var resultFiles []string
+	for _, item := range items {
+		fmt.Printf("  %-50s %s  [dry]\n", item.key, formatSize(item.size))
+		resultFiles = append(resultFiles, item.key)
 	}
 
 	return &Result{

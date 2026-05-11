@@ -187,6 +187,20 @@ bucketOK:
 
 	configPath, _ := config.ConfigFilePath()
 	fmt.Printf("  Config saved to %s\n", configPath)
+
+	fmt.Print("\n  Verifying connection... ")
+	verifyClient, err := s3client.NewClient(endpoint, accessKey, secretKey, config.DefaultRegion, bucket)
+	if err == nil {
+		verifyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		err = verifyClient.HeadBucket(verifyCtx)
+	}
+	if err != nil {
+		fmt.Printf("✗\n  Warning: connection test failed — double-check your credentials.\n")
+	} else {
+		fmt.Println("✓")
+	}
+
 	fmt.Println()
 	fmt.Println("  Done! Try:")
 	fmt.Printf("    cubbit-pages deploy ./my-site\n")
