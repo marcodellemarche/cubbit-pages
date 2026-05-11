@@ -333,8 +333,9 @@ func openCmd() *cobra.Command {
 		Use:   "open",
 		Short: "Open the deployed site in the default browser",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := cfg.Resolve(); err != nil {
-				return err
+			cfg.ResolveOpen()
+			if cfg.Bucket == "" {
+				return fmt.Errorf("bucket is required (--bucket or CUBBIT_BUCKET)")
 			}
 			siteURL := cfg.SiteURL()
 			fmt.Printf("Opening %s\n", siteURL)
@@ -343,8 +344,6 @@ func openCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
-	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
-	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
 	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
 	cmd.Flags().StringVar(&cfg.Prefix, "prefix", "", "S3 key prefix")
 
@@ -375,6 +374,8 @@ func listCmd() *cobra.Command {
 			if err := cfg.Resolve(); err != nil {
 				return err
 			}
+
+			prefix = strings.Trim(prefix, "/")
 
 			client, err := s3client.NewClient(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.Bucket)
 			if err != nil {
@@ -423,6 +424,8 @@ func deleteCmd() *cobra.Command {
 				return err
 			}
 
+			prefix = strings.Trim(prefix, "/")
+
 			client, err := s3client.NewClient(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.Bucket)
 			if err != nil {
 				return err
@@ -452,8 +455,8 @@ func deleteCmd() *cobra.Command {
 				}
 				answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
 				if answer != "y" && answer != "yes" {
-					fmt.Println("Aborted.")
-					return nil
+					fmt.Fprintln(os.Stderr, "Aborted.")
+					os.Exit(1)
 				}
 			}
 

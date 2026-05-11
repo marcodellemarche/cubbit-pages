@@ -114,6 +114,32 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// ResolveOpen fills only bucket and endpoint — the two fields needed by the open
+// command to build a URL. Does not require or validate credentials.
+func (c *Config) ResolveOpen() {
+	fileCfg, _ := LoadFileConfig()
+
+	if c.Endpoint == "" {
+		if v := os.Getenv("CUBBIT_ENDPOINT"); v != "" {
+			c.Endpoint = v
+		} else if fileCfg != nil && fileCfg.Endpoint != "" {
+			c.Endpoint = fileCfg.Endpoint
+		} else {
+			c.Endpoint = DefaultEndpoint
+		}
+	}
+
+	if c.Bucket == "" {
+		if v := os.Getenv("CUBBIT_BUCKET"); v != "" {
+			c.Bucket = v
+		} else if fileCfg != nil {
+			c.Bucket = fileCfg.Bucket
+		}
+	}
+
+	c.Prefix = strings.Trim(c.Prefix, "/")
+}
+
 // SiteURL returns the public URL of the deployed site using virtual-hosted style.
 func (c *Config) SiteURL() string {
 	prefix := ""

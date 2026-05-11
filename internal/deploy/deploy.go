@@ -139,41 +139,48 @@ func runWithUploader(ctx context.Context, files []FileEntry, opts Options, uploa
 		}
 	}
 
-	// Upload with concurrency
+	// Upload with concurrency, collecting results in order for deterministic output.
+	type uploadResult struct {
+		key  string
+		size int
+		err  error
+	}
+
+	results := make([]uploadResult, len(items))
+
 	var (
 		uploaded int64
-		errs     []error
-		mu       sync.Mutex
 		sem      = make(chan struct{}, opts.Concurrency)
 		wg       sync.WaitGroup
 	)
 
-	var uploadedFiles []string
-
-	for _, item := range items {
+	for i, item := range items {
+		i, item := i, item
 		sem <- struct{}{}
 		wg.Add(1)
-		go func(key string, data []byte) {
+		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-
-			fmt.Printf("  %-50s %d bytes\n", key, len(data))
-
-			if err := uploadFn(ctx, key, data); err != nil {
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("%s: %w", key, err))
-				mu.Unlock()
-				return
+			err := uploadFn(ctx, item.key, item.data)
+			results[i] = uploadResult{key: item.key, size: len(item.data), err: err}
+			if err == nil {
+				atomic.AddInt64(&uploaded, 1)
 			}
-
-			atomic.AddInt64(&uploaded, 1)
-			mu.Lock()
-			uploadedFiles = append(uploadedFiles, key)
-			mu.Unlock()
-		}(item.key, item.data)
+		}()
 	}
 
 	wg.Wait()
+
+	var errs []error
+	var uploadedFiles []string
+	for _, r := range results {
+		if r.err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", r.key, r.err))
+		} else {
+			fmt.Printf("  %-50s %d bytes\n", r.key, r.size)
+			uploadedFiles = append(uploadedFiles, r.key)
+		}
+	}
 
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("upload errors: %v", errs)
