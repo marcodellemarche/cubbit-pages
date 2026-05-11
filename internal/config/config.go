@@ -100,9 +100,6 @@ func (c *Config) Validate() error {
 	if c.Encrypt && c.Password == "" {
 		return fmt.Errorf("password is required when --encrypt is set")
 	}
-	if c.SourceDir == "" {
-		return fmt.Errorf("source directory is required")
-	}
 	return nil
 }
 
