@@ -30,6 +30,7 @@ func main() {
 
 	rootCmd.AddCommand(setupCmd())
 	rootCmd.AddCommand(deployCmd())
+	rootCmd.AddCommand(listCmd())
 	rootCmd.AddCommand(snippetsCmd())
 	rootCmd.AddCommand(versionCmd())
 
@@ -319,6 +320,65 @@ func versionCmd() *cobra.Command {
 			fmt.Printf("  built:   %s\n", BuildDate)
 		},
 	}
+}
+
+func listCmd() *cobra.Command {
+	cfg := &config.Config{}
+	var prefix string
+
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List files in a Cubbit S3 bucket",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := cfg.Resolve(); err != nil {
+				return err
+			}
+
+			client, err := s3client.NewClient(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.Bucket)
+			if err != nil {
+				return err
+			}
+
+			objects, err := client.ListObjects(cmd.Context(), prefix)
+			if err != nil {
+				return err
+			}
+
+			if len(objects) == 0 {
+				fmt.Println("No files found.")
+				return nil
+			}
+
+			fmt.Printf("%-60s  %8s  %s\n", "KEY", "SIZE", "LAST MODIFIED")
+			fmt.Println(strings.Repeat("─", 88))
+			for _, obj := range objects {
+				fmt.Printf("%-60s  %8s  %s\n", obj.Key, formatSize(obj.Size), obj.LastModified.Format("2006-01-02 15:04"))
+			}
+			fmt.Printf("\n%d file(s)\n", len(objects))
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
+	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
+	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
+	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
+	cmd.Flags().StringVar(&prefix, "prefix", "", "filter by S3 key prefix")
+
+	return cmd
+}
+
+func formatSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func readPassword(prompt string) (string, error) {

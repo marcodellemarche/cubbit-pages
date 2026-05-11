@@ -4,12 +4,20 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
+
+// ObjectInfo holds metadata for a single S3 object.
+type ObjectInfo struct {
+	Key          string
+	Size         int64
+	LastModified time.Time
+}
 
 // Client wraps the S3 client with Cubbit-specific configuration.
 type Client struct {
@@ -87,4 +95,43 @@ func (c *Client) CreateBucket(ctx context.Context, name, region string) error {
 		return fmt.Errorf("creating bucket %q: %w", name, err)
 	}
 	return nil
+}
+
+// ListObjects returns all objects in the bucket, optionally filtered by prefix.
+func (c *Client) ListObjects(ctx context.Context, prefix string) ([]ObjectInfo, error) {
+	var objects []ObjectInfo
+	var continuationToken *string
+
+	for {
+		input := &s3.ListObjectsV2Input{
+			Bucket:            aws.String(c.Bucket),
+			ContinuationToken: continuationToken,
+		}
+		if prefix != "" {
+			input.Prefix = aws.String(prefix)
+		}
+
+		out, err := c.S3.ListObjectsV2(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("listing objects in %q: %w", c.Bucket, err)
+		}
+
+		for _, obj := range out.Contents {
+			info := ObjectInfo{Key: aws.ToString(obj.Key)}
+			if obj.Size != nil {
+				info.Size = *obj.Size
+			}
+			if obj.LastModified != nil {
+				info.LastModified = *obj.LastModified
+			}
+			objects = append(objects, info)
+		}
+
+		if out.IsTruncated == nil || !*out.IsTruncated {
+			break
+		}
+		continuationToken = out.NextContinuationToken
+	}
+
+	return objects, nil
 }
