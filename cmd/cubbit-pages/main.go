@@ -108,16 +108,16 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 		bucket = strings.TrimSpace(scanner.Text())
 		if bucket == "" {
-			fmt.Println("  Il nome del bucket non può essere vuoto.")
+			fmt.Println("  Bucket name cannot be empty.")
 			continue
 		}
 
-		fmt.Printf("\n  Verifica bucket %q...", bucket)
+		fmt.Printf("\n  Checking bucket %q...", bucket)
 
 		switch client.ProbeBucket(ctx, bucket) {
 		case s3client.BucketExists:
 			fmt.Println()
-			fmt.Print("  Bucket già esistente. Usarlo? (Y/n) ")
+			fmt.Print("  Bucket already exists. Use it? (Y/n) ")
 			if !scanner.Scan() {
 				return fmt.Errorf("aborted")
 			}
@@ -129,22 +129,22 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			continue
 
 		case s3client.BucketForbidden:
-			fmt.Print("\n  ✗ Bucket esistente ma non tuo. Scegli un altro nome.\n\n")
+			fmt.Print("\n  ✗ Bucket exists but is not yours. Choose a different name.\n\n")
 			continue
 
 		case s3client.BucketNotFound:
-			fmt.Printf(" creazione in corso...")
+			fmt.Printf(" creating...")
 			if err := client.CreateBucket(ctx, bucket, config.DefaultRegion); err != nil {
 				es := err.Error()
 				if strings.Contains(es, "BucketAlreadyExists") {
-					fmt.Print("\n  ✗ Bucket già esistente e non tuo. Scegli un altro nome.\n\n")
+					fmt.Print("\n  ✗ Bucket already exists and is not yours. Choose a different name.\n\n")
 					continue
 				}
 				if strings.Contains(es, "InvalidBucketName") {
-					fmt.Printf("\n  ✗ Nome bucket non valido: %s\n\n", bucket)
+					fmt.Printf("\n  ✗ Invalid bucket name: %s\n\n", bucket)
 					continue
 				}
-				fmt.Printf("\n  ✗ Errore: %v\n\n", err)
+				fmt.Printf("\n  ✗ Error: %v\n\n", err)
 				continue
 			}
 			fmt.Print(" ✓\n\n")
@@ -164,10 +164,10 @@ bucketOK:
 	}
 
 	configPath, _ := config.ConfigFilePath()
-	fmt.Printf("  Config salvata in %s\n", configPath)
+	fmt.Printf("  Config saved to %s\n", configPath)
 	fmt.Println()
-	fmt.Println("  Pronto! Prova:")
-	fmt.Printf("    cubbit-pages deploy ./mio-sito\n")
+	fmt.Println("  Done! Try:")
+	fmt.Printf("    cubbit-pages deploy ./my-site\n")
 	fmt.Println()
 
 	return nil
@@ -194,7 +194,7 @@ func deployCmd() *cobra.Command {
 
 			// If encrypt is set but no password, ask interactively
 			if cfg.Encrypt && cfg.Password == "" {
-				pwd, err := readPassword("Password per cifratura: ")
+				pwd, err := readPassword("Encryption password: ")
 				if err != nil {
 					return fmt.Errorf("reading password: %w", err)
 				}
@@ -209,14 +209,14 @@ func deployCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("\nDeploy su s3://%s/\n", cfg.Bucket)
+			fmt.Printf("\nDeploying to s3://%s/\n", cfg.Bucket)
 			if cfg.Encrypt {
-				fmt.Println("Modalità: cifrata (AES-256-GCM)")
+				fmt.Println("Mode: encrypted (AES-256-GCM)")
 			} else {
-				fmt.Println("Modalità: in chiaro")
+				fmt.Println("Mode: plaintext")
 			}
 			if cfg.DryRun {
-				fmt.Println("⚠ Dry run — nessun file verrà caricato")
+				fmt.Println("⚠ Dry run — no files will be uploaded")
 			}
 			fmt.Println()
 
@@ -241,12 +241,12 @@ func deployCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("\nDeploy completato: %d file caricati\n", result.FilesUploaded)
+			fmt.Printf("\nDeploy complete: %d file(s) uploaded\n", result.FilesUploaded)
 			fmt.Printf("URL: %s\n", result.SiteURL)
 
 			if !cfg.PublicBucket && !cfg.DryRun {
-				fmt.Println("\nNota: i file sono stati resi pubblici tramite ACL per-oggetto.")
-				fmt.Println("Per usare una bucket policy invece, usa --public-bucket e applica:")
+				fmt.Println("\nNote: files were made public via per-object ACL.")
+				fmt.Println("To use a bucket policy instead, use --public-bucket and apply:")
 				fmt.Printf("  cubbit-pages snippets --bucket %s --type bucket-policy\n", cfg.Bucket)
 			}
 
