@@ -7,7 +7,7 @@ CLI Go per deploy di siti statici su Cubbit S3, con cifratura opzionale AES-256-
 - Cifratura AES-256-GCM con PBKDF2 per derivazione chiave
 - Upload diretto su bucket Cubbit dell'utente via aws-sdk-go-v2
 - Pagina di login generata automaticamente e iniettata come index.html
-- Password memorizzata in localStorage lato browser per evitare re-login ad ogni pagina
+- Password memorizzata in sessionStorage lato browser (login/loader page); il service worker usa IndexedDB (scope SW, non accessibile agli script di pagina)
 - Service worker (`sw.js`) intercetta i fetch e decripta .enc al volo per siti multi-file
 
 ## Comandi

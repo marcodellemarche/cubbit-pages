@@ -336,7 +336,7 @@ Interactive wizard that prompts for each UI string and appends the new entry to 
 - Random salt and nonce per file (16 bytes and 12 bytes)
 - Password never transmitted over the network — decryption happens in the browser
 - Canary file (`_verify.enc`) validates the password without downloading large files
-- Service worker persists the password in IndexedDB (accessible to SW, unlike localStorage) so it survives SW restarts; never transmitted or stored on disk
+- Service worker persists the password in IndexedDB (SW scope only, not accessible to page scripts) so it survives SW restarts; the login and loader pages use `sessionStorage` (cleared on tab close); password is never transmitted or stored on disk
 - `sw.js` is the only unencrypted file besides the login page (it contains no secrets)
 - S3 credentials are never saved to disk by the CLI
 
