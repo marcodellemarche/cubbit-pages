@@ -41,7 +41,7 @@ make build
 cubbit-pages setup
 ```
 
-This creates the bucket if it doesn't exist, then saves credentials to `~/.cubbit/pages/config.yaml` so you don't need to repeat them on every deploy.
+The wizard prompts for Access Key, Secret Key, Endpoint, Bucket, and login page locale. It creates the bucket if it doesn't exist, verifies the connection, then saves everything to `~/.cubbit/pages/config.yaml` so you don't need to repeat credentials on every deploy.
 
 5. Show the bucket configuration snippets:
 
@@ -73,14 +73,37 @@ cubbit-pages deploy ./my-site \
 ### Encrypted deploy
 
 ```bash
-# Password as flag
-cubbit-pages deploy ./my-site --encrypt --password "my-secret-password"
-
-# Password from stdin (useful for scripts)
-echo "my-secret-password" | cubbit-pages deploy ./my-site --encrypt
-
-# Password prompted interactively (if --password is omitted)
+# Password prompted interactively (recommended)
 cubbit-pages deploy ./my-site --encrypt
+
+# Password via environment variable (good for CI)
+export CUBBIT_PASSWORD="my-secret-password"
+cubbit-pages deploy ./my-site --encrypt
+
+# Password from stdin
+echo "my-secret-password" | cubbit-pages deploy ./my-site --encrypt
+```
+
+### Preview before deploying
+
+```bash
+# Dry run — shows exactly what would be uploaded with real file sizes, no upload
+cubbit-pages deploy ./my-site --encrypt --dry-run
+```
+
+```
+Deploying to s3://my-bucket/
+Mode: encrypted (AES-256-GCM)
+⚠ Dry run — no files will be uploaded
+
+  index.html                                         10.2 KB  [dry]
+  sw.js                                               7.9 KB  [dry]
+  _verify.enc                                           64 B  [dry]
+  about.html.enc                                       3.9 KB  [dry]
+  style.css.enc                                        3.8 KB  [dry]
+
+Deploy complete: 0 file(s) uploaded
+URL: https://my-bucket.s3.cubbit.eu/index.html
 ```
 
 ### Environment variables
@@ -91,11 +114,36 @@ All credentials can be passed via env (overrides config file):
 export CUBBIT_ACCESS_KEY=...
 export CUBBIT_SECRET_KEY=...
 export CUBBIT_BUCKET=my-bucket
+export CUBBIT_PASSWORD=my-secret-password  # for encrypted deploys
+export CUBBIT_LOCALE=it                    # login page language
 
-cubbit-pages deploy ./my-site --encrypt --password "..."
+cubbit-pages deploy ./my-site --encrypt
 ```
 
 Priority: CLI flags > environment variables > `~/.cubbit/pages/config.yaml`
+
+### Check current config and last deploy
+
+```bash
+cubbit-pages status
+```
+
+```
+  Config (~/.cubbit/pages/config.yaml)
+  ────────────────────────────────────────────
+  Bucket:      my-bucket
+  Endpoint:    https://s3.cubbit.eu
+  Locale:      en
+
+  Last deploy
+  ────────────────────────────────────────────
+  Bucket:      my-bucket
+  Prefix:      weekly/2026-05-11
+  Files:       7
+  Mode:        encrypted (AES-256-GCM)
+  Date:        2026-05-11 14:32
+  URL:         https://my-bucket.s3.cubbit.eu/weekly/2026-05-11/index.html
+```
 
 ## GitHub Action
 
@@ -163,23 +211,20 @@ This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.)
 | `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
 | `--endpoint` | S3 endpoint (default: `https://s3.cubbit.eu`) |
 | `--encrypt`, `-e` | Enable AES-256-GCM encryption |
-| `--password`, `-p` | Encryption password |
+| `--password`, `-p` | Encryption password (or `CUBBIT_PASSWORD`; omit to be prompted) |
 | `--public-bucket` | Assume public bucket policy (skip per-object ACL) |
 | `--dry-run` | Show what would be uploaded without uploading |
 | `--concurrency` | Parallel uploads (default: 5) |
 | `--prefix` | S3 key prefix for all files |
-| `--locale` | Login page language: `en`, `it` (default: `en`) |
-
-### `cubbit-pages snippets`
-
-| Flag | Description |
-|------|-------------|
-| `--bucket`, `-b` | Bucket name |
-| `--type` | `bucket-policy`, `cors`, `iam`, `lifecycle`, `all` (default: `all`) |
+| `--locale` | Login page language: `en`, `it` (default: `en`, or `CUBBIT_LOCALE`) |
 
 ### `cubbit-pages setup`
 
-Interactive wizard. Prompts for Access Key, Secret Key, Endpoint (optional) and Bucket. If the bucket doesn't exist, creates it automatically. Saves to `~/.cubbit/pages/config.yaml` (mode 0600). Credentials loaded by subsequent commands with lowest priority (flags and env override them).
+Interactive wizard. Prompts for Access Key, Secret Key, Endpoint, Bucket, and login page locale. Creates the bucket if it doesn't exist. Verifies the connection with `HeadBucket`. Saves to `~/.cubbit/pages/config.yaml` (mode 0600).
+
+### `cubbit-pages status`
+
+Shows the current config file contents and metadata about the last successful deploy (bucket, prefix, URL, file count, encryption mode, date).
 
 ### `cubbit-pages list`
 
@@ -199,20 +244,27 @@ Interactive wizard. Prompts for Access Key, Secret Key, Endpoint (optional) and 
 | `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
 | `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
 | `--endpoint` | S3 endpoint |
-| `--prefix` | Delete only files with this prefix |
+| `--prefix` | Delete only files with this prefix (omitting deletes the entire bucket — a warning is shown) |
 | `--yes`, `-y` | Skip confirmation prompt |
+
+Exits with code 1 if the user aborts the confirmation.
 
 ### `cubbit-pages open`
 
 | Flag | Description |
 |------|-------------|
 | `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
-| `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
-| `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
 | `--endpoint` | S3 endpoint |
-| `--prefix` | S3 key prefix |
+| `--prefix` | S3 key prefix (defaults to the prefix of the last deploy) |
 
-Opens the deployed site URL in the system browser (`xdg-open` on Linux, `open` on macOS, `start` on Windows).
+Opens the deployed site URL in the system browser (`xdg-open` on Linux, `open` on macOS, `start` on Windows). Does not require S3 credentials — only bucket and endpoint are needed to build the URL.
+
+### `cubbit-pages snippets`
+
+| Flag | Description |
+|------|-------------|
+| `--bucket`, `-b` | Bucket name |
+| `--type` | `bucket-policy`, `cors`, `iam`, `lifecycle`, `all` (default: `all`) |
 
 ### `cubbit-pages version`
 
