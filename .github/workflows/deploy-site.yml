@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'site-demo/**'
   workflow_dispatch:
 
 jobs:
@@ -13,10 +14,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Deploy to Cubbit S3
+      - name: Deploy landing page to Cubbit S3
         uses: ./
         with:
           source-dir: ./site
           bucket: pages
+          access-key: ${{ secrets.CUBBIT_ACCESS_KEY }}
+          secret-key: ${{ secrets.CUBBIT_SECRET_KEY }}
+
+      - name: Deploy encrypted demo to Cubbit S3
+        uses: ./
+        with:
+          source-dir: ./site-demo
+          bucket: pages
+          prefix: demo
+          encrypt: true
+          password: pippofranco
           access-key: ${{ secrets.CUBBIT_ACCESS_KEY }}
           secret-key: ${{ secrets.CUBBIT_SECRET_KEY }}

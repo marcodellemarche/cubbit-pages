@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secret Dashboard — Cubbit Pages Demo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <a class="logo" href="index.html">
+    <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="28">
+      <path d="M18 3L33 11.6V24.4L18 33 3 24.4V11.6L18 3Z" stroke="#009EFF" stroke-width="1.5" fill="rgba(0,158,255,0.08)"/>
+      <rect x="13" y="16" width="10" height="8" rx="1.5" stroke="#009EFF" stroke-width="1.5"/>
+      <path d="M15 16V14a3 3 0 016 0v2" stroke="#009EFF" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="18" cy="20.5" r="1.2" fill="#009EFF"/>
+    </svg>
+    Cubbit <span>Pages</span> &mdash; Demo
+  </a>
+  <nav>
+    <a href="index.html">Dashboard</a>
+    <a href="about.html">About</a>
+  </nav>
+</header>
+
+<main>
+  <div class="badge">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+    Encrypted with Cubbit Pages &middot; AES-256-GCM
+  </div>
+
+  <h1>Welcome to the <span>Secret Zone</span></h1>
+  <p class="subtitle">
+    This is a demo of a private encrypted site deployed on Cubbit S3.
+    Every file — HTML, CSS, images — is encrypted at rest. Only you can read it.
+  </p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Files encrypted</div>
+      <div class="stat-value">3</div>
+      <div class="stat-note">index.html, style.css, about.html</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Encryption</div>
+      <div class="stat-value" style="font-size:1.1rem;padding-top:.35rem">AES-256</div>
+      <div class="stat-note">GCM + PBKDF2 key derivation</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Backend servers</div>
+      <div class="stat-value">0</div>
+      <div class="stat-note">Pure S3 + Web Crypto API</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M4 17l6-6 4 4 6-8"/></svg>
+      Recent activity
+    </h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>File</th>
+          <th>Status</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Decrypted</td>
+          <td><code>index.html.enc</code></td>
+          <td><span class="status"><span class="dot"></span>OK</span></td>
+          <td>just now</td>
+        </tr>
+        <tr>
+          <td>Decrypted</td>
+          <td><code>style.css.enc</code></td>
+          <td><span class="status"><span class="dot"></span>OK</span></td>
+          <td>just now</td>
+        </tr>
+        <tr>
+          <td>Verified</td>
+          <td><code>_verify.enc</code></td>
+          <td><span class="status"><span class="dot"></span>OK</span></td>
+          <td>on login</td>
+        </tr>
+        <tr>
+          <td>SW registered</td>
+          <td><code>sw.js</code></td>
+          <td><span class="status"><span class="dot"></span>Active</span></td>
+          <td>on login</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      How it works
+    </h2>
+    <table>
+      <thead>
+        <tr><th>Step</th><th>What happens</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1. Upload</td><td>CLI encrypts every file with AES-256-GCM and uploads <code>.enc</code> blobs to Cubbit S3</td></tr>
+        <tr><td>2. Login</td><td>Browser downloads the public <code>index.html</code> (login page) and verifies your password against <code>_verify.enc</code></td></tr>
+        <tr><td>3. Service Worker</td><td>SW intercepts all fetch requests and decrypts <code>.enc</code> files on the fly using the Web Crypto API</td></tr>
+        <tr><td>4. Navigate</td><td>Links work normally — the SW transparently decrypts every asset before the browser sees it</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="demo-note">
+    This demo is deployed with password <strong>pippofranco</strong> and lives at
+    <code>https://pages.s3.cubbit.eu/demo/</code>.<br>
+    Try navigating to <a href="about.html">About</a> — that page is encrypted too.
+    Built with <a href="https://github.com/marcodellemarche/cubbit-pages">Cubbit Pages</a>.
+  </div>
+</main>
+
+<footer>
+  <a href="https://github.com/marcodellemarche/cubbit-pages">Cubbit Pages</a> &mdash; deployed on Cubbit S3 &middot; AES-256-GCM encrypted
+</footer>
+
+</body>
+</html>
