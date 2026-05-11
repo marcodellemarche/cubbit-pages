@@ -3,6 +3,11 @@
 All notable changes to cubbit-pages are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.1] — 2026-05-12
+
+### Security
+- Replace `localStorage` with `sessionStorage` for password storage in the login page and loader page. `sessionStorage` is cleared when the tab is closed, reducing the XSS exposure window. The service worker already used IndexedDB independently.
+
 ## [Unreleased]
 
 ### Added
