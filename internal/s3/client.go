@@ -135,3 +135,31 @@ func (c *Client) ListObjects(ctx context.Context, prefix string) ([]ObjectInfo, 
 
 	return objects, nil
 }
+
+// DeleteObjects deletes the given keys from the bucket in batches of 1000.
+func (c *Client) DeleteObjects(ctx context.Context, keys []string) error {
+	const batchSize = 1000
+	for i := 0; i < len(keys); i += batchSize {
+		end := i + batchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+
+		identifiers := make([]s3types.ObjectIdentifier, len(keys[i:end]))
+		for j, key := range keys[i:end] {
+			identifiers[j] = s3types.ObjectIdentifier{Key: aws.String(key)}
+		}
+
+		_, err := c.S3.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(c.Bucket),
+			Delete: &s3types.Delete{
+				Objects: identifiers,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("deleting objects: %w", err)
+		}
+	}
+	return nil
+}

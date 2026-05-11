@@ -31,6 +31,7 @@ func main() {
 	rootCmd.AddCommand(setupCmd())
 	rootCmd.AddCommand(deployCmd())
 	rootCmd.AddCommand(listCmd())
+	rootCmd.AddCommand(deleteCmd())
 	rootCmd.AddCommand(snippetsCmd())
 	rootCmd.AddCommand(versionCmd())
 
@@ -364,6 +365,77 @@ func listCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
 	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
 	cmd.Flags().StringVar(&prefix, "prefix", "", "filter by S3 key prefix")
+
+	return cmd
+}
+
+func deleteCmd() *cobra.Command {
+	cfg := &config.Config{}
+	var prefix string
+	var yes bool
+
+	cmd := &cobra.Command{
+		Use:   "delete",
+		Short: "Delete files from a Cubbit S3 bucket",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := cfg.Resolve(); err != nil {
+				return err
+			}
+
+			client, err := s3client.NewClient(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.Bucket)
+			if err != nil {
+				return err
+			}
+
+			objects, err := client.ListObjects(cmd.Context(), prefix)
+			if err != nil {
+				return err
+			}
+
+			if len(objects) == 0 {
+				fmt.Println("No files found.")
+				return nil
+			}
+
+			fmt.Printf("Files to delete from s3://%s/:\n\n", cfg.Bucket)
+			for _, obj := range objects {
+				fmt.Printf("  %s (%s)\n", obj.Key, formatSize(obj.Size))
+			}
+			fmt.Printf("\n%d file(s) will be permanently deleted.\n\n", len(objects))
+
+			if !yes {
+				fmt.Print("Confirm? (y/N) ")
+				scanner := bufio.NewScanner(os.Stdin)
+				if !scanner.Scan() {
+					return fmt.Errorf("aborted")
+				}
+				answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
+				if answer != "y" && answer != "yes" {
+					fmt.Println("Aborted.")
+					return nil
+				}
+			}
+
+			keys := make([]string, len(objects))
+			for i, obj := range objects {
+				keys[i] = obj.Key
+			}
+
+			if err := client.DeleteObjects(cmd.Context(), keys); err != nil {
+				return err
+			}
+
+			fmt.Printf("Deleted %d file(s).\n", len(keys))
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
+	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
+	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
+	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
+	cmd.Flags().StringVar(&prefix, "prefix", "", "delete only files with this S3 key prefix")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
 
 	return cmd
 }

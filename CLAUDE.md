@@ -17,6 +17,7 @@ CLI Go per deploy di siti statici su Cubbit S3, con cifratura opzionale AES-256-
 - `make test-integration` — build + integration test end-to-end (richiede CUBBIT_ACCESS_KEY, CUBBIT_SECRET_KEY, CUBBIT_BUCKET)
 - `make test-coverage` — coverage report
 - `make lint` — golangci-lint
+- `make add-locale LOCALE=<code>` — wizard interattivo per aggiungere una nuova locale (modifica `internal/login/locales.go`, solo per sviluppatori)
 
 ## Uso base
 ```bash
@@ -29,8 +30,15 @@ cubbit-pages deploy ./mio-sito --bucket mio-bucket
 # Deploy cifrato (password da flag)
 cubbit-pages deploy ./mio-sito --bucket mio-bucket --encrypt --password "parola-parola-parola"
 
-# Deploy cifrato (password da stdin)
-echo "parola-parola-parola" | cubbit-pages deploy ./mio-sito --bucket mio-bucket --encrypt
+# Deploy cifrato con login page in italiano
+cubbit-pages deploy ./mio-sito --bucket mio-bucket --encrypt --password "parola-parola-parola" --locale it
+
+# Lista file nel bucket
+cubbit-pages list --bucket mio-bucket
+cubbit-pages list --bucket mio-bucket --prefix weekly/2026-05-11/
+
+# Cancella file dal bucket (chiede conferma)
+cubbit-pages delete --bucket mio-bucket --prefix weekly/2026-05-11/
 
 # Mostra snippet bucket policy
 cubbit-pages snippets --bucket mio-bucket
@@ -45,10 +53,13 @@ cubbit-pages snippets --bucket mio-bucket
 ## File chiave
 - `internal/crypto/crypto.go` — logica AES-256-GCM
 - `internal/deploy/deploy.go` — orchestrazione deploy
-- `internal/login/generator.go` — generazione pagina di login e service worker
+- `internal/login/generator.go` — generazione pagina di login e service worker (usa `html/template`)
+- `internal/login/locales.go` — struct `Strings`, map `locales` (en/it), `KnownLocales()`, `LocaleStrings()`, `IsKnownLocale()`
 - `internal/login/sw.js` — service worker per decryption trasparente di asset .enc
 - `internal/s3/upload.go` — upload con gestione ACL
+- `internal/s3/client.go` — client S3, `ListObjects` (paginato), `DeleteObjects` (batch 1000)
 - `internal/config/file.go` — load/save `~/.cubbit/pages/config.yaml` (YAML, 0600)
+- `scripts/add-locale.go` — wizard interattivo per aggiungere locale (build tag `ignore`, solo `go run`/`make add-locale`)
 - `scripts/test-deploy.sh` — integration test: 6 scenari + verifica decrypt con Node.js
 - `scripts/verify-decrypt.mjs` — decryption JS (Web Crypto API) per verifica roundtrip
 

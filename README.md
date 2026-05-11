@@ -123,6 +123,7 @@ Cubbit Pages ships as a reusable GitHub Action. Drop it into any workflow:
 | `password` | no | — | Encryption password |
 | `public-bucket` | no | `false` | Skip per-object ACL |
 | `prefix` | no | — | S3 key prefix |
+| `locale` | no | `en` | Login page language (`en`, `it`) |
 | `concurrency` | no | `5` | Parallel uploads |
 | `version` | no | `latest` | CLI version to download |
 
@@ -165,6 +166,7 @@ This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.)
 | `--dry-run` | Show what would be uploaded without uploading |
 | `--concurrency` | Parallel uploads (default: 5) |
 | `--prefix` | S3 key prefix for all files |
+| `--locale` | Login page language: `en`, `it` (default: `en`) |
 
 ### `cubbit-pages snippets`
 
@@ -177,9 +179,38 @@ This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.)
 
 Interactive wizard. Prompts for Access Key, Secret Key, Endpoint (optional) and Bucket. If the bucket doesn't exist, creates it automatically. Saves to `~/.cubbit/pages/config.yaml` (mode 0600). Credentials loaded by subsequent commands with lowest priority (flags and env override them).
 
+### `cubbit-pages list`
+
+| Flag | Description |
+|------|-------------|
+| `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
+| `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
+| `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
+| `--endpoint` | S3 endpoint |
+| `--prefix` | Filter by S3 key prefix |
+
+### `cubbit-pages delete`
+
+| Flag | Description |
+|------|-------------|
+| `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
+| `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
+| `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
+| `--endpoint` | S3 endpoint |
+| `--prefix` | Delete only files with this prefix |
+| `--yes`, `-y` | Skip confirmation prompt |
+
 ### `cubbit-pages version`
 
 Shows version, commit hash and build date.
+
+### Adding a new locale (contributors only)
+
+```bash
+make add-locale LOCALE=fr
+```
+
+Interactive wizard that prompts for each UI string and appends the new entry to `internal/login/locales.go`. Run `make test` afterwards to verify all fields are populated.
 
 ## Security
 
