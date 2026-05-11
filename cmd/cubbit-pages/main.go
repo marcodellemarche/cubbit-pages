@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/marcodellemarche/cubbit-pages/internal/config"
@@ -32,6 +34,7 @@ func main() {
 	rootCmd.AddCommand(deployCmd())
 	rootCmd.AddCommand(listCmd())
 	rootCmd.AddCommand(deleteCmd())
+	rootCmd.AddCommand(openCmd())
 	rootCmd.AddCommand(snippetsCmd())
 	rootCmd.AddCommand(versionCmd())
 
@@ -321,6 +324,44 @@ func versionCmd() *cobra.Command {
 			fmt.Printf("  built:   %s\n", BuildDate)
 		},
 	}
+}
+
+func openCmd() *cobra.Command {
+	cfg := &config.Config{}
+
+	cmd := &cobra.Command{
+		Use:   "open",
+		Short: "Open the deployed site in the default browser",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := cfg.Resolve(); err != nil {
+				return err
+			}
+			siteURL := cfg.SiteURL()
+			fmt.Printf("Opening %s\n", siteURL)
+			return openBrowser(siteURL)
+		},
+	}
+
+	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
+	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
+	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
+	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
+	cmd.Flags().StringVar(&cfg.Prefix, "prefix", "", "S3 key prefix")
+
+	return cmd
+}
+
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
 }
 
 func listCmd() *cobra.Command {
