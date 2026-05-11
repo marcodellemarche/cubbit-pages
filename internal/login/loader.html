@@ -42,6 +42,16 @@
     });
   }
 
+  function injectLoadingOverlay(html){
+    var style='<style id="__cp_ovl_s__">#__cp_ovl__{position:fixed;inset:0;z-index:99999;background:#0a0e17;display:flex;align-items:center;justify-content:center;transition:opacity .3s}#__cp_spin__{width:32px;height:32px;border:3px solid rgba(0,158,255,.2);border-top-color:#009EFF;border-radius:50%;animation:__cp_r__ .6s linear infinite}@keyframes __cp_r__{to{transform:rotate(360deg)}}</style>';
+    var div='<div id="__cp_ovl__"><div id="__cp_spin__"></div></div>';
+    var rm='<script>(function(){function r(){var o=document.getElementById("__cp_ovl__");if(o){o.style.opacity="0";setTimeout(function(){o.parentNode&&o.parentNode.removeChild(o);},300);}}if(document.readyState==="complete"){r();}else{window.addEventListener("load",r);}})();<\/script>';
+    html=html.replace(/(<head[^>]*>)/i,function(m){return m+style;});
+    html=html.replace(/(<body[^>]*>)/i,function(m){return m+div;});
+    html=html.replace(/<\/body>/i,rm+'</body>');
+    return html;
+  }
+
   function loadEncryptedDirect(){
     return fetch(encUrl).then(function(r){
       if(!r.ok)throw new Error('fetch failed');
@@ -49,7 +59,7 @@
     }).then(function(buf){
       return decryptData(new Uint8Array(buf),pwd);
     }).then(function(plain){
-      var html=new TextDecoder().decode(plain);
+      var html=injectLoadingOverlay(new TextDecoder().decode(plain));
       document.open();
       document.write(html);
       document.close();
@@ -85,7 +95,7 @@
         return r.text();
       }).then(function(html){
         document.open();
-        document.write(html);
+        document.write(injectLoadingOverlay(html));
         document.close();
       });
     }else{
