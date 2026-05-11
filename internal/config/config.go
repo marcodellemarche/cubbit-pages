@@ -24,6 +24,7 @@ type Config struct {
 	Password     string
 	PublicBucket bool
 	DryRun       bool
+	Clean        bool
 	Concurrency  int
 	Prefix       string
 	SourceDir    string

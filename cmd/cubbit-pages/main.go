@@ -3,9 +3,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -39,6 +43,7 @@ func main() {
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(snippetsCmd())
 	rootCmd.AddCommand(versionCmd())
+	rootCmd.AddCommand(updateCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -267,6 +272,7 @@ func deployCmd() *cobra.Command {
 				Password:     cfg.Password,
 				PublicBucket: cfg.PublicBucket,
 				DryRun:       cfg.DryRun,
+				Clean:        cfg.Clean,
 				Concurrency:  cfg.Concurrency,
 				Prefix:       cfg.Prefix,
 				Locale:       cfg.Locale,
@@ -279,6 +285,12 @@ func deployCmd() *cobra.Command {
 			}
 
 			fmt.Printf("\nDeploy complete: %d file(s) uploaded\n", result.FilesUploaded)
+			if result.FilesRemoved > 0 {
+				for _, k := range result.RemovedFiles {
+					fmt.Printf("  [clean] %s\n", k)
+				}
+				fmt.Printf("Cleaned:  %d stale file(s) removed\n", result.FilesRemoved)
+			}
 			fmt.Printf("URL: %s\n", result.SiteURL)
 
 			// Persist last deploy metadata (create config file if it doesn't exist yet).
@@ -312,10 +324,12 @@ func deployCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
 	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
 	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
+	cmd.Flags().StringVar(&cfg.Region, "region", "", "AWS/S3 region (default: eu-west-1)")
 	cmd.Flags().BoolVarP(&cfg.Encrypt, "encrypt", "e", false, "enable AES-256-GCM encryption")
 	cmd.Flags().StringVarP(&cfg.Password, "password", "p", "", "encryption password (prompted if --encrypt and not provided)")
 	cmd.Flags().BoolVar(&cfg.PublicBucket, "public-bucket", false, "assume public bucket policy (skip per-object ACL)")
 	cmd.Flags().BoolVar(&cfg.DryRun, "dry-run", false, "show what would be uploaded without uploading")
+	cmd.Flags().BoolVar(&cfg.Clean, "clean", true, "delete S3 files not present in source directory (use --clean=false to disable)")
 	cmd.Flags().IntVar(&cfg.Concurrency, "concurrency", config.DefaultConcurrency, "number of parallel uploads")
 	cmd.Flags().StringVar(&cfg.Prefix, "prefix", "", "S3 key prefix for all files")
 	cmd.Flags().StringVar(&cfg.Locale, "locale", "", fmt.Sprintf("login page locale (%s)", strings.Join(login.KnownLocales(), ", ")))
@@ -378,6 +392,7 @@ func versionCmd() *cobra.Command {
 func statusCmd() *cobra.Command {
 	cfg := &config.Config{}
 	var deep bool
+	var asJSON bool
 
 	cmd := &cobra.Command{
 		Use:   "status",
@@ -388,8 +403,26 @@ func statusCmd() *cobra.Command {
 				return fmt.Errorf("reading config: %w", err)
 			}
 
-			configPath, _ := config.ConfigFilePath()
+			var inventory []s3client.DeployInfo
+			if deep {
+				if err := cfg.Resolve(); err != nil {
+					return fmt.Errorf("--deep requires credentials: %w", err)
+				}
+				client, err := s3client.NewClient(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.Bucket)
+				if err != nil {
+					return err
+				}
+				inventory, err = client.DiscoverDeploys(cmd.Context(), cfg.Endpoint)
+				if err != nil {
+					return fmt.Errorf("scanning bucket: %w", err)
+				}
+			}
 
+			if asJSON {
+				return printStatusJSON(fc, inventory)
+			}
+
+			configPath, _ := config.ConfigFilePath()
 			fmt.Println()
 			fmt.Printf("  Config (%s)\n", configPath)
 			fmt.Println("  " + strings.Repeat("─", 44))
@@ -440,31 +473,17 @@ func statusCmd() *cobra.Command {
 				return nil
 			}
 
-			// --deep: query S3 for full bucket inventory.
-			if err := cfg.Resolve(); err != nil {
-				return fmt.Errorf("--deep requires credentials: %w", err)
-			}
-			client, err := s3client.NewClient(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.Bucket)
-			if err != nil {
-				return err
-			}
-
-			deploys, err := client.DiscoverDeploys(cmd.Context(), cfg.Endpoint)
-			if err != nil {
-				return fmt.Errorf("scanning bucket: %w", err)
-			}
-
 			fmt.Printf("  Bucket inventory: %s", cfg.Bucket)
-			if len(deploys) == 0 {
+			if len(inventory) == 0 {
 				fmt.Println(" (no deploys found)")
 				fmt.Println()
 				return nil
 			}
-			fmt.Printf(" (%d deploy)\n", len(deploys))
+			fmt.Printf(" (%d deploy)\n", len(inventory))
 			fmt.Println("  " + strings.Repeat("─", 44))
 			fmt.Println()
 
-			for i, d := range deploys {
+			for i, d := range inventory {
 				pfxDisplay := d.Prefix
 				if pfxDisplay == "" {
 					pfxDisplay = "(root)"
@@ -492,12 +511,49 @@ func statusCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&deep, "deep", false, "query S3 for full deploy inventory (requires credentials)")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output as JSON (machine-readable)")
 	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
 	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
 	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
 	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
+	cmd.Flags().StringVar(&cfg.Region, "region", "", "AWS/S3 region (default: eu-west-1)")
 
 	return cmd
+}
+
+type statusJSON struct {
+	Config     *statusJSONConfig  `json:"config,omitempty"`
+	LastDeploy *config.LastDeploy `json:"last_deploy,omitempty"`
+	Inventory  []s3client.DeployInfo `json:"inventory,omitempty"`
+}
+
+type statusJSONConfig struct {
+	Bucket   string `json:"bucket"`
+	Endpoint string `json:"endpoint"`
+	Locale   string `json:"locale"`
+}
+
+func printStatusJSON(fc *config.FileConfig, inventory []s3client.DeployInfo) error {
+	out := statusJSON{Inventory: inventory}
+	if fc != nil {
+		endpoint := fc.Endpoint
+		if endpoint == "" {
+			endpoint = config.DefaultEndpoint
+		}
+		locale := fc.Locale
+		if locale == "" {
+			locale = "en"
+		}
+		out.Config = &statusJSONConfig{
+			Bucket:   fc.Bucket,
+			Endpoint: endpoint,
+			Locale:   locale,
+		}
+		out.LastDeploy = fc.LastDeploy
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(out)
 }
 
 func openCmd() *cobra.Command {
@@ -580,6 +636,7 @@ func listCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
 	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
 	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
+	cmd.Flags().StringVar(&cfg.Region, "region", "", "AWS/S3 region (default: eu-west-1)")
 	cmd.Flags().StringVar(&prefix, "prefix", "", "filter by S3 key prefix")
 
 	return cmd
@@ -655,6 +712,7 @@ func deleteCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
 	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
 	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
+	cmd.Flags().StringVar(&cfg.Region, "region", "", "AWS/S3 region (default: eu-west-1)")
 	cmd.Flags().StringVar(&prefix, "prefix", "", "delete only files with this S3 key prefix")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompt")
 
@@ -672,6 +730,107 @@ func formatSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func updateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "update",
+		Short: "Update cubbit-pages to the latest release",
+		RunE:  runUpdate,
+	}
+}
+
+func runUpdate(cmd *cobra.Command, args []string) error {
+	const repo = "marcodellemarche/cubbit-pages"
+	const apiURL = "https://api.github.com/repos/" + repo + "/releases/latest"
+
+	fmt.Printf("Checking latest release...\n")
+
+	req, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, apiURL, nil)
+	if err != nil {
+		return fmt.Errorf("building request: %w", err)
+	}
+	req.Header.Set("User-Agent", "cubbit-pages/"+Version)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("fetching release info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return fmt.Errorf("parsing release info: %w", err)
+	}
+
+	latest := release.TagName
+	if latest == "" {
+		return fmt.Errorf("could not determine latest version")
+	}
+
+	if Version != "dev" && Version == latest {
+		fmt.Printf("Already up to date (%s).\n", Version)
+		return nil
+	}
+
+	fmt.Printf("Updating %s → %s\n", Version, latest)
+
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+	filename := fmt.Sprintf("cubbit-pages-%s-%s", goos, goarch)
+	if goos == "windows" {
+		filename += ".exe"
+	}
+	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, latest, filename)
+
+	fmt.Printf("Downloading %s...\n", filename)
+
+	dlReq, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, downloadURL, nil)
+	if err != nil {
+		return fmt.Errorf("building download request: %w", err)
+	}
+	dlResp, err := http.DefaultClient.Do(dlReq)
+	if err != nil {
+		return fmt.Errorf("downloading binary: %w", err)
+	}
+	defer dlResp.Body.Close()
+	if dlResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed: HTTP %d (unsupported platform?)", dlResp.StatusCode)
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding current binary: %w", err)
+	}
+	if exe, err = filepath.EvalSymlinks(exe); err != nil {
+		return fmt.Errorf("resolving symlink: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp(filepath.Dir(exe), "cubbit-pages-update-*")
+	if err != nil {
+		return fmt.Errorf("creating temp file (try running with sudo): %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := io.Copy(tmpFile, dlResp.Body); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("writing binary: %w", err)
+	}
+	tmpFile.Close()
+
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		return fmt.Errorf("setting permissions: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, exe); err != nil {
+		return fmt.Errorf("replacing binary (try running with sudo): %w", err)
+	}
+
+	fmt.Printf("✓ Updated to %s\n", latest)
+	return nil
 }
 
 func readPassword(prompt string) (string, error) {

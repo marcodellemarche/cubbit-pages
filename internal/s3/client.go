@@ -221,7 +221,7 @@ func (c *Client) DiscoverDeploys(ctx context.Context, endpoint string) ([]Deploy
 
 		info := DeployInfo{
 			Prefix: pfx,
-			URL:    buildSiteURL(endpoint, c.Bucket, pfx),
+			URL:    BuildSiteURL(endpoint, c.Bucket, pfx),
 		}
 		if st, ok := prefixStats[pfx]; ok {
 			info.FileCount = st.count
@@ -271,7 +271,7 @@ func (c *Client) DiscoverDeploys(ctx context.Context, endpoint string) ([]Deploy
 	return deploys, nil
 }
 
-func buildSiteURL(endpoint, bucket, prefix string) string {
+func BuildSiteURL(endpoint, bucket, prefix string) string {
 	pfx := ""
 	if prefix != "" {
 		pfx = prefix + "/"

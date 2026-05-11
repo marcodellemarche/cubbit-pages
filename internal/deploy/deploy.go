@@ -3,7 +3,6 @@ package deploy
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,17 +27,6 @@ func formatSize(n int) string {
 	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
-func siteURL(endpoint, bucket, prefix string) string {
-	pfx := ""
-	if prefix != "" {
-		pfx = prefix + "/"
-	}
-	u, err := url.Parse(endpoint)
-	if err != nil || u.Host == "" || u.Port() != "" {
-		return fmt.Sprintf("%s/%s/%sindex.html", endpoint, bucket, pfx)
-	}
-	return fmt.Sprintf("%s://%s.%s/%sindex.html", u.Scheme, bucket, u.Host, pfx)
-}
 
 // Options configures a deploy operation.
 type Options struct {
@@ -52,6 +40,7 @@ type Options struct {
 	Password     string
 	PublicBucket bool
 	DryRun       bool
+	Clean        bool
 	Concurrency  int
 	Prefix       string
 	Locale       string
@@ -60,9 +49,11 @@ type Options struct {
 
 // Result holds the result of a deploy operation.
 type Result struct {
-	FilesUploaded int
-	SiteURL       string
-	Files         []string
+	FilesUploaded  int
+	FilesRemoved   int
+	SiteURL        string
+	Files          []string
+	RemovedFiles   []string
 }
 
 // UploadFunc is the function signature for uploading a file.
@@ -98,7 +89,55 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	uploader := s3client.NewUploader(client, !opts.PublicBucket, opts.Prefix, meta)
 	uploadFn := uploader.Upload
 
-	return runWithUploader(ctx, files, opts, uploadFn)
+	result, err := runWithUploader(ctx, files, opts, uploadFn)
+	if err != nil {
+		return nil, err
+	}
+
+	if opts.Clean {
+		removed, removedFiles, cleanErr := cleanStale(ctx, client, opts.Prefix, result.Files)
+		if cleanErr != nil {
+			return nil, fmt.Errorf("cleaning stale files: %w", cleanErr)
+		}
+		result.FilesRemoved = removed
+		result.RemovedFiles = removedFiles
+	}
+
+	return result, nil
+}
+
+// cleanStale deletes S3 objects in prefix that are not in uploadedRelKeys.
+func cleanStale(ctx context.Context, client *s3client.Client, prefix string, uploadedRelKeys []string) (int, []string, error) {
+	existing, err := client.ListObjects(ctx, prefix)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	uploaded := make(map[string]bool, len(uploadedRelKeys))
+	for _, k := range uploadedRelKeys {
+		if prefix != "" {
+			uploaded[prefix+"/"+k] = true
+		} else {
+			uploaded[k] = true
+		}
+	}
+
+	var toDelete []string
+	for _, obj := range existing {
+		if !uploaded[obj.Key] {
+			toDelete = append(toDelete, obj.Key)
+		}
+	}
+
+	if len(toDelete) == 0 {
+		return 0, nil, nil
+	}
+
+	if err := client.DeleteObjects(ctx, toDelete); err != nil {
+		return 0, nil, err
+	}
+
+	return len(toDelete), toDelete, nil
 }
 
 // runWithUploader executes the deploy with a given upload function (for testability).
@@ -208,7 +247,7 @@ func runWithUploader(ctx context.Context, files []FileEntry, opts Options, uploa
 
 	return &Result{
 		FilesUploaded: int(uploaded),
-		SiteURL:       siteURL(opts.Endpoint, opts.Bucket, opts.Prefix),
+		SiteURL:       s3client.BuildSiteURL(opts.Endpoint, opts.Bucket, opts.Prefix),
 		Files:         uploadedFiles,
 	}, nil
 }
@@ -267,7 +306,7 @@ func dryRun(files []FileEntry, opts Options) (*Result, error) {
 
 	return &Result{
 		FilesUploaded: 0,
-		SiteURL:       siteURL(opts.Endpoint, opts.Bucket, opts.Prefix),
+		SiteURL:       s3client.BuildSiteURL(opts.Endpoint, opts.Bucket, opts.Prefix),
 		Files:         resultFiles,
 	}, nil
 }

@@ -240,10 +240,12 @@ This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.)
 | `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
 | `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
 | `--endpoint` | S3 endpoint (default: `https://s3.cubbit.eu`) |
+| `--region` | AWS/S3 region (default: `eu-west-1`) |
 | `--encrypt`, `-e` | Enable AES-256-GCM encryption |
 | `--password`, `-p` | Encryption password (or `CUBBIT_PASSWORD`; omit to be prompted) |
 | `--public-bucket` | Assume public bucket policy (skip per-object ACL) |
 | `--dry-run` | Show what would be uploaded without uploading |
+| `--clean` | Delete S3 files not in source directory after upload (default: `true`; use `--clean=false` to disable) |
 | `--concurrency` | Parallel uploads (default: 5) |
 | `--prefix` | S3 key prefix for all files |
 | `--locale` | Login page language: `en`, `it` (default: `en`, or `CUBBIT_LOCALE`) |
@@ -257,12 +259,24 @@ Interactive wizard. Prompts for Access Key, Secret Key, Endpoint, Bucket, and lo
 | Flag | Description |
 |------|-------------|
 | `--deep` | Query S3 for full deploy inventory (requires credentials) |
+| `--json` | Output as JSON (machine-readable; works with or without `--deep`) |
 | `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) — needed for `--deep` without config file |
 | `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
 | `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
 | `--endpoint` | S3 endpoint |
+| `--region` | AWS/S3 region (default: `eu-west-1`) |
 
 Without `--deep`: reads from `~/.cubbit/pages/config.yaml` (fast, offline). With `--deep`: does 1 ListObjects + 1 HeadObject per deploy found; shows full inventory from S3.
+
+### `cubbit-pages update`
+
+Downloads and installs the latest release in-place:
+
+```bash
+cubbit-pages update
+```
+
+If the binary is in a system directory (e.g. `/usr/local/bin`), run with `sudo`. On Windows, run as Administrator.
 
 ### `cubbit-pages list`
 

@@ -171,6 +171,34 @@ run_test "6. encrypt flag + prefix" \
 verify_decrypt "6" "$PREFIX/" "$PASSWORD"
 
 echo ""
+echo "── status --deep ──────────────────────────────"
+
+run_test "7. status --deep lists prefixed deploy" \
+  bash -c "'$BIN' status --deep ${BASE_FLAGS[*]} | grep -q '$PREFIX'"
+
+run_test "8. status --deep --json contains inventory" \
+  bash -c "'$BIN' status --deep --json ${BASE_FLAGS[*]} | grep -q '\"inventory\"'"
+
+run_test "9. status --deep shows S3 metadata (encrypted flag)" \
+  bash -c "'$BIN' status --deep --json ${BASE_FLAGS[*]} | grep -q '\"encrypted\"'"
+
+echo ""
+echo "── --clean removes stale files ────────────────"
+
+# Deploy a site, then deploy again without one file to verify clean removes it.
+STALE_KEY="${PREFIX}/js/app.js.enc"
+run_test "10. stale file absent after clean deploy" \
+  bash -c "
+    # First deploy: full site with prefix
+    '$BIN' deploy '$SITE' ${BASE_FLAGS[*]} --encrypt --password '$PASSWORD' --prefix '$PREFIX'
+    # Second deploy: plain (no encryption), same prefix — different files → should clean .enc files
+    '$BIN' deploy '$SITE' ${BASE_FLAGS[*]} --prefix '$PREFIX'
+    # The .enc files from the encrypted deploy should be gone
+    ! AWS_ACCESS_KEY_ID='$AK' AWS_SECRET_ACCESS_KEY='$SK' \
+      aws s3 ls 's3://$BUCKET/$STALE_KEY' ${S3_FLAGS[*]} 2>/dev/null | grep -q '$STALE_KEY'
+  "
+
+echo ""
 echo "────────────────────────────────────────────────"
 echo "  Passed: $PASS / $((PASS + FAIL))"
 if [[ $FAIL -gt 0 ]]; then
