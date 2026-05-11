@@ -2,6 +2,17 @@ package config
 
 import "testing"
 
+func TestResolveWithoutSourceDir(t *testing.T) {
+	c := &Config{
+		Bucket:    "bucket",
+		AccessKey: "ak",
+		SecretKey: "sk",
+	}
+	if err := c.Resolve(); err != nil {
+		t.Fatalf("Resolve without SourceDir should succeed for non-deploy commands: %v", err)
+	}
+}
+
 func TestResolveNormalizesPrefix(t *testing.T) {
 	cases := []struct {
 		in   string
