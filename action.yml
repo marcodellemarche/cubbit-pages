@@ -39,6 +39,10 @@ inputs:
     description: 'S3 key prefix for all uploaded files'
     required: false
     default: ''
+  locale:
+    description: 'Login page locale (en, it)'
+    required: false
+    default: 'en'
   concurrency:
     description: 'Number of parallel uploads'
     required: false
@@ -98,15 +102,14 @@ runs:
           ARGS="$ARGS --prefix ${{ inputs.prefix }}"
         fi
 
-        /tmp/cubbit-pages $ARGS \
-          --access-key "${{ inputs.access-key }}" \
-          --secret-key "${{ inputs.secret-key }}"
-
-        # Extract URL for output
-        PREFIX="${{ inputs.prefix }}"
-        if [ -n "$PREFIX" ]; then
-          PREFIX="${PREFIX}/"
+        if [ -n "${{ inputs.locale }}" ]; then
+          ARGS="$ARGS --locale ${{ inputs.locale }}"
         fi
-        URL="${{ inputs.endpoint }}/${{ inputs.bucket }}/${PREFIX}index.html"
+
+        OUTPUT=$(/tmp/cubbit-pages $ARGS \
+          --access-key "${{ inputs.access-key }}" \
+          --secret-key "${{ inputs.secret-key }}" 2>&1)
+        echo "$OUTPUT"
+
+        URL=$(echo "$OUTPUT" | grep "^URL:" | sed 's/^URL: //')
         echo "url=$URL" >> "$GITHUB_OUTPUT"
-        echo "Deployed to: $URL"
