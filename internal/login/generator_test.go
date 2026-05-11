@@ -39,10 +39,10 @@ func TestGenerateLoginPageContainsDecryptionJS(t *testing.T) {
 	}
 }
 
-func TestGenerateLoginPageContainsLocalStorageKey(t *testing.T) {
+func TestGenerateLoginPageContainsSessionStorageKey(t *testing.T) {
 	html := GenerateLoginPage("en")
 	if !strings.Contains(html, "cubbitseal_password") {
-		t.Fatal("login page missing localStorage key")
+		t.Fatal("login page missing sessionStorage key")
 	}
 }
 
@@ -356,14 +356,14 @@ func TestServiceWorkerHandlesClearPassword(t *testing.T) {
 func TestLoginPageSendsClearPasswordOnLogout(t *testing.T) {
 	html := GenerateLoginPage("en")
 	if !strings.Contains(html, "CLEAR_PASSWORD") {
-		t.Fatal("login page must send CLEAR_PASSWORD to SW when clearing localStorage")
+		t.Fatal("login page must send CLEAR_PASSWORD to SW when clearing sessionStorage")
 	}
 }
 
 func TestLoaderSendsClearPasswordOnLogout(t *testing.T) {
 	loader := GenerateLoader("test.html.enc")
 	if !strings.Contains(loader, "CLEAR_PASSWORD") {
-		t.Fatal("loader must send CLEAR_PASSWORD to SW when clearing localStorage")
+		t.Fatal("loader must send CLEAR_PASSWORD to SW when clearing sessionStorage")
 	}
 }
 

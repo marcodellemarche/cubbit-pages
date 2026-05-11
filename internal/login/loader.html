@@ -16,7 +16,7 @@
   var ITERATIONS=100000;
   var STORAGE_KEY='cubbitseal_password';
 
-  var pwd=localStorage.getItem(STORAGE_KEY);
+  var pwd=sessionStorage.getItem(STORAGE_KEY);
   if(!pwd){window.location.href='index.html';return;}
 
   var encUrl='{{ENC_URL}}';
@@ -102,7 +102,7 @@
       return loadEncryptedDirect();
     }
   }).catch(function(){
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
     if(navigator.serviceWorker&&navigator.serviceWorker.controller){
       navigator.serviceWorker.controller.postMessage({type:'CLEAR_PASSWORD'});
     }
