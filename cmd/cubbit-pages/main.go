@@ -158,11 +158,26 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 bucketOK:
+	fmt.Printf("? Login page locale [en] (%s): ", strings.Join(login.KnownLocales(), "/"))
+	if !scanner.Scan() {
+		return fmt.Errorf("aborted")
+	}
+	locale := strings.TrimSpace(scanner.Text())
+	if locale == "" {
+		locale = "en"
+	}
+	if !login.IsKnownLocale(locale) {
+		fmt.Printf("  Unknown locale %q — using \"en\". Available: %s\n", locale, strings.Join(login.KnownLocales(), ", "))
+		locale = "en"
+	}
+	fmt.Println()
+
 	fc := &config.FileConfig{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 		Bucket:    bucket,
 		Endpoint:  endpoint,
+		Locale:    locale,
 	}
 	if err := config.SaveFileConfig(fc); err != nil {
 		return fmt.Errorf("saving config: %w", err)
@@ -441,6 +456,9 @@ func deleteCmd() *cobra.Command {
 				return nil
 			}
 
+			if prefix == "" {
+				fmt.Fprintf(os.Stderr, "WARNING: no --prefix specified — ALL files in s3://%s/ will be deleted.\n\n", cfg.Bucket)
+			}
 			fmt.Printf("Files to delete from s3://%s/:\n\n", cfg.Bucket)
 			for _, obj := range objects {
 				fmt.Printf("  %s (%s)\n", obj.Key, formatSize(obj.Size))

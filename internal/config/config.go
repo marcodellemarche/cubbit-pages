@@ -94,22 +94,28 @@ func (c *Config) Resolve() error {
 		}
 	}
 
+	if c.Password == "" {
+		if v := os.Getenv("CUBBIT_PASSWORD"); v != "" {
+			c.Password = v
+		}
+	}
+
 	return c.Validate()
 }
 
 // Validate checks that required fields are set.
 func (c *Config) Validate() error {
 	if c.Bucket == "" {
-		return fmt.Errorf("bucket is required (--bucket or CUBBIT_BUCKET)")
+		return fmt.Errorf("bucket is required — use --bucket, CUBBIT_BUCKET, or run `cubbit-pages setup`")
 	}
 	if c.AccessKey == "" {
-		return fmt.Errorf("access key is required (--access-key or CUBBIT_ACCESS_KEY)")
+		return fmt.Errorf("access key is required — use --access-key, CUBBIT_ACCESS_KEY, or run `cubbit-pages setup`")
 	}
 	if c.SecretKey == "" {
-		return fmt.Errorf("secret key is required (--secret-key or CUBBIT_SECRET_KEY)")
+		return fmt.Errorf("secret key is required — use --secret-key, CUBBIT_SECRET_KEY, or run `cubbit-pages setup`")
 	}
 	if c.Encrypt && c.Password == "" {
-		return fmt.Errorf("password is required when --encrypt is set")
+		return fmt.Errorf("encryption password is required — use --password, CUBBIT_PASSWORD, or omit --password to be prompted interactively")
 	}
 	return nil
 }
