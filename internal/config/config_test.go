@@ -51,10 +51,10 @@ func TestSiteURLDoesNotProduceDoubleSlash(t *testing.T) {
 		prefix string
 		want   string
 	}{
-		{"empty prefix", "", "https://s3.cubbit.eu/bucket/index.html"},
-		{"trailing slash gets normalized", "weekly/2026-04-27/", "https://s3.cubbit.eu/bucket/weekly/2026-04-27/index.html"},
-		{"leading slash gets normalized", "/weekly/2026-04-27", "https://s3.cubbit.eu/bucket/weekly/2026-04-27/index.html"},
-		{"both slashes get normalized", "/weekly/2026-04-27/", "https://s3.cubbit.eu/bucket/weekly/2026-04-27/index.html"},
+		{"empty prefix", "", "https://bucket.s3.cubbit.eu/index.html"},
+		{"trailing slash gets normalized", "weekly/2026-04-27/", "https://bucket.s3.cubbit.eu/weekly/2026-04-27/index.html"},
+		{"leading slash gets normalized", "/weekly/2026-04-27", "https://bucket.s3.cubbit.eu/weekly/2026-04-27/index.html"},
+		{"both slashes get normalized", "/weekly/2026-04-27/", "https://bucket.s3.cubbit.eu/weekly/2026-04-27/index.html"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

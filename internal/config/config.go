@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -103,11 +104,15 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// SiteURL returns the public URL of the deployed site.
+// SiteURL returns the public URL of the deployed site using virtual-hosted style.
 func (c *Config) SiteURL() string {
 	prefix := ""
 	if c.Prefix != "" {
 		prefix = c.Prefix + "/"
 	}
-	return fmt.Sprintf("%s/%s/%sindex.html", c.Endpoint, c.Bucket, prefix)
+	u, err := url.Parse(c.Endpoint)
+	if err != nil || u.Host == "" {
+		return fmt.Sprintf("%s/%s/%sindex.html", c.Endpoint, c.Bucket, prefix)
+	}
+	return fmt.Sprintf("%s://%s.%s/%sindex.html", u.Scheme, c.Bucket, u.Host, prefix)
 }
