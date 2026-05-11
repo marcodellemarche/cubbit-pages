@@ -808,9 +808,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolving symlink: %w", err)
 	}
 
-	tmpFile, err := os.CreateTemp(filepath.Dir(exe), "cubbit-pages-update-*")
+	tmpFile, err := os.CreateTemp("", "cubbit-pages-update-*")
 	if err != nil {
-		return fmt.Errorf("creating temp file (try running with sudo): %w", err)
+		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
@@ -825,12 +825,32 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("setting permissions: %w", err)
 	}
 
+	// Try atomic rename first; falls back to copy if tmp and exe are on different filesystems.
 	if err := os.Rename(tmpPath, exe); err != nil {
-		return fmt.Errorf("replacing binary (try running with sudo): %w", err)
+		if err := replaceByCopy(tmpPath, exe); err != nil {
+			return fmt.Errorf("replacing binary (try: sudo cubbit-pages update): %w", err)
+		}
 	}
 
 	fmt.Printf("✓ Updated to %s\n", latest)
 	return nil
+}
+
+func replaceByCopy(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
 }
 
 func readPassword(prompt string) (string, error) {
