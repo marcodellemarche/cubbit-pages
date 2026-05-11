@@ -6,7 +6,7 @@ LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.Bu
 
 PLATFORMS=linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
-.PHONY: build release test test-integration test-coverage lint clean
+.PHONY: build release test test-integration test-coverage lint clean add-locale
 
 build:
 	go build $(LDFLAGS) -o bin/$(BINARY) ./cmd/cubbit-pages
@@ -35,3 +35,9 @@ lint:
 
 clean:
 	rm -rf bin/ coverage.out coverage.html
+
+add-locale:
+ifndef LOCALE
+	$(error LOCALE is required, e.g. make add-locale LOCALE=fr)
+endif
+	go run scripts/add-locale.go $(LOCALE)
