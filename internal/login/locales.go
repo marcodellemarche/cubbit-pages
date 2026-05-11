@@ -1,5 +1,7 @@
 package login
 
+import "sort"
+
 type Strings struct {
 	Lang                string
 	Title               string
@@ -10,7 +12,8 @@ type Strings struct {
 	SubmitText          string
 	ErrorText           string
 	NetworkErrorText    string
-	FooterText          string
+	FooterPrefix        string
+	FooterSuffix        string
 }
 
 var locales = map[string]Strings{
@@ -24,7 +27,8 @@ var locales = map[string]Strings{
 		SubmitText:          "Sign in",
 		ErrorText:           "Incorrect password",
 		NetworkErrorText:    "Network error — try again",
-		FooterText:          "Protected with Cubbit Pages",
+		FooterPrefix:        "Protected with",
+		FooterSuffix:        "Pages",
 	},
 	"it": {
 		Lang:                "it",
@@ -36,7 +40,8 @@ var locales = map[string]Strings{
 		SubmitText:          "Accedi",
 		ErrorText:           "Password non corretta",
 		NetworkErrorText:    "Errore di rete — riprova",
-		FooterText:          "Protetto con Cubbit Pages",
+		FooterPrefix:        "Protetto con",
+		FooterSuffix:        "Pages",
 	},
 }
 
@@ -45,6 +50,7 @@ func KnownLocales() []string {
 	for code := range locales {
 		codes = append(codes, code)
 	}
+	sort.Strings(codes)
 	return codes
 }
 

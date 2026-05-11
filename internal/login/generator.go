@@ -2,8 +2,8 @@ package login
 
 import (
 	"bytes"
+	"html/template"
 	"strings"
-	"text/template"
 )
 
 // GenerateLoginPage returns the HTML for the login page in the given locale.
