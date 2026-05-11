@@ -47,6 +47,16 @@ cubbit-pages open --bucket mio-bucket
 cubbit-pages snippets --bucket mio-bucket
 ```
 
+## UX post-login
+- Dopo login, prima di `document.write(html)` viene iniettato un overlay scuro (`#0a0e17`) con spinner Cubbit
+- L'overlay si dissolve su `window.load` (quando tutti i CSS sono pronti) — niente flash bianco
+- Logica in `injectLoadingOverlay()` in `internal/login/template.html` e `internal/login/loader.html`
+
+## Demo site cifrata
+- `site-demo/` — sito demo (index.html, about.html, style.css) deployato cifrato su bucket `pages`, prefix `demo`
+- URL: `https://pages.s3.cubbit.eu/demo/index.html` — password pubblica: `pippofranco`
+- Deploy gestito da `.github/workflows/deploy-site.yml` (secondo step, dopo la landing page)
+
 ## Variabili d'ambiente
 - `CUBBIT_ACCESS_KEY`
 - `CUBBIT_SECRET_KEY`

@@ -146,7 +146,9 @@ When deploying with `--encrypt`:
    - It intercepts every browser fetch (scripts, stylesheets, images, fonts, etc.)
    - For each request: if the original resource returns 404, it tries `<url>.enc`, decrypts in-memory, and returns the plaintext with the correct `Content-Type`
    - Decrypted responses are cached for performance
+   - Password is persisted to IndexedDB so it survives service worker restarts without requiring re-login
 6. For each HTML file, a "loader" page handles direct navigation (e.g., bookmark to `/about.html`)
+7. A dark loading overlay (Cubbit colors + spinner) is injected into every decrypted page before `document.write` and dissolves on `window.load`, eliminating the white flash while external CSS is being fetched and decrypted
 
 This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.), sites with separate JS/CSS/images, all work transparently after login.
 
@@ -200,6 +202,18 @@ Interactive wizard. Prompts for Access Key, Secret Key, Endpoint (optional) and 
 | `--prefix` | Delete only files with this prefix |
 | `--yes`, `-y` | Skip confirmation prompt |
 
+### `cubbit-pages open`
+
+| Flag | Description |
+|------|-------------|
+| `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
+| `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
+| `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
+| `--endpoint` | S3 endpoint |
+| `--prefix` | S3 key prefix |
+
+Opens the deployed site URL in the system browser (`xdg-open` on Linux, `open` on macOS, `start` on Windows).
+
 ### `cubbit-pages version`
 
 Shows version, commit hash and build date.
@@ -218,7 +232,7 @@ Interactive wizard that prompts for each UI string and appends the new entry to 
 - Random salt and nonce per file (16 bytes and 12 bytes)
 - Password never transmitted over the network — decryption happens in the browser
 - Canary file (`_verify.enc`) validates the password without downloading large files
-- Service worker holds the password only in memory (never persisted to disk)
+- Service worker persists the password in IndexedDB (accessible to SW, unlike localStorage) so it survives SW restarts; never transmitted or stored on disk
 - `sw.js` is the only unencrypted file besides the login page (it contains no secrets)
 - S3 credentials are never saved to disk by the CLI
 
