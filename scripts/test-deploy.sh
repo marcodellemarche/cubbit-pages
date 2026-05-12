@@ -139,6 +139,7 @@ BASE_FLAGS=(--access-key "$AK" --secret-key "$SK" --bucket "$BUCKET")
 if [[ -n "$ENDPOINT" ]]; then
   BASE_FLAGS+=(--endpoint "$ENDPOINT")
 fi
+STATUS_FLAGS=("${BASE_FLAGS[@]}")
 if [[ "$PUBLIC_BUCKET" == "true" ]]; then
   BASE_FLAGS+=(--public-bucket)
 fi
@@ -174,13 +175,13 @@ echo ""
 echo "── status --deep ──────────────────────────────"
 
 run_test "7. status --deep lists prefixed deploy" \
-  bash -c "'$BIN' status --deep ${BASE_FLAGS[*]} | grep -q '$PREFIX'"
+  bash -c "'$BIN' status --deep ${STATUS_FLAGS[*]} | grep -q '$PREFIX'"
 
 run_test "8. status --deep --json contains inventory" \
-  bash -c "'$BIN' status --deep --json ${BASE_FLAGS[*]} | grep -q '\"inventory\"'"
+  bash -c "'$BIN' status --deep --json ${STATUS_FLAGS[*]} | grep -q '\"inventory\"'"
 
 run_test "9. status --deep shows S3 metadata (encrypted flag)" \
-  bash -c "'$BIN' status --deep --json ${BASE_FLAGS[*]} | grep -q '\"encrypted\"'"
+  bash -c "'$BIN' status --deep --json ${STATUS_FLAGS[*]} | grep -q '\"encrypted\"'"
 
 echo ""
 echo "── --clean removes stale files ────────────────"
