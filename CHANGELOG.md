@@ -3,7 +3,7 @@
 All notable changes to cubbit-pages are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.0.0] — 2026-05-12
 
 ### Added
 - `install.ps1`: one-liner installer for Windows (`powershell -ExecutionPolicy Bypass -Command "irm .../install.ps1 | iex"`). Detects architecture (amd64/arm64), downloads binary and SHA256 checksum, verifies integrity, installs to `%LOCALAPPDATA%\cubbit-pages\`, and adds the directory to the user PATH.
