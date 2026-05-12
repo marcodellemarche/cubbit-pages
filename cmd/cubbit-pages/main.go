@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -800,6 +802,25 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("download failed: HTTP %d (unsupported platform?)", dlResp.StatusCode)
 	}
 
+	checksumURL := downloadURL + ".sha256"
+	csReq, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, checksumURL, nil)
+	if err != nil {
+		return fmt.Errorf("building checksum request: %w", err)
+	}
+	csResp, err := http.DefaultClient.Do(csReq)
+	if err != nil {
+		return fmt.Errorf("downloading checksum: %w", err)
+	}
+	defer csResp.Body.Close()
+	if csResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("checksum not available: HTTP %d", csResp.StatusCode)
+	}
+	csBody, err := io.ReadAll(csResp.Body)
+	if err != nil {
+		return fmt.Errorf("reading checksum: %w", err)
+	}
+	expectedHash := strings.Fields(string(csBody))[0]
+
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("finding current binary: %w", err)
@@ -808,18 +829,25 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolving symlink: %w", err)
 	}
 
-	tmpFile, err := os.CreateTemp("", "cubbit-pages-update-*")
+	tmpFile, err := os.CreateTemp(os.TempDir(), "cubbit-pages-update-*")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	if _, err := io.Copy(tmpFile, dlResp.Body); err != nil {
+	h := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(tmpFile, h), dlResp.Body); err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("writing binary: %w", err)
 	}
 	tmpFile.Close()
+
+	actualHash := hex.EncodeToString(h.Sum(nil))
+	if actualHash != expectedHash {
+		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedHash, actualHash)
+	}
+	fmt.Printf("✓ Checksum verified\n")
 
 	if err := os.Chmod(tmpPath, 0755); err != nil {
 		return fmt.Errorf("setting permissions: %w", err)

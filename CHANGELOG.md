@@ -3,24 +3,15 @@
 All notable changes to cubbit-pages are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.2] — 2026-05-12
+
+### Security
+- `update` command now verifies the SHA256 checksum of the downloaded binary before replacing the current executable. Download is aborted if the checksum does not match.
+
 ## [0.6.1] — 2026-05-12
 
 ### Security
 - Replace `localStorage` with `sessionStorage` for password storage in the login page and loader page. `sessionStorage` is cleared when the tab is closed, reducing the XSS exposure window. The service worker already used IndexedDB independently.
-
-## [Unreleased]
-
-### Added
-- `deploy --clean` (default on): deletes S3 files not present in the source directory after upload — eliminates stale content from previous deploys. Use `--clean=false` to disable.
-- `deploy --region`: override the AWS/S3 region (default: `eu-west-1`). Also available on `list`, `delete`, `status --deep`.
-- `status --json`: machine-readable JSON output including config, last deploy, and (with `--deep`) the full bucket inventory.
-- `update` command: downloads and replaces the binary in-place from the latest GitHub release. Checks current version, skips if already up to date.
-
-### Fixed
-- `last_deploy` was silently skipped when no config file existed (i.e. `setup` was never run). Now always written after every successful non-dry-run deploy.
-
-### Refactored
-- `siteURL` (deploy.go) and `buildSiteURL` (client.go) consolidated into the exported `s3.BuildSiteURL`.
 
 ---
 
