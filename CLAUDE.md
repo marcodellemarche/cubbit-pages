@@ -90,7 +90,7 @@ cubbit-pages snippets --bucket mio-bucket
 - `status --json` emette JSON strutturato (config + last_deploy + inventory se --deep); utile per CI/CD scripting
 - Deploy senza metadati (pre-v0.5.0) mostrano `(no metadata)` con fallback su LastModified da ListObjects
 - `deploy --clean` (default: true): dopo l'upload fa ListObjects sul prefix e cancella i file S3 non presenti nella sorgente; disabilitabile con `--clean=false`; skippato in dry-run
-- `update`: scarica l'ultima release da GitHub API, sostituisce il binario in-place; richiede permesso di scrittura sulla directory di installazione
+- `update`: scarica l'ultima release da GitHub API, verifica il checksum SHA256 (`{filename}.sha256`) prima di sostituire il binario in-place; richiede permesso di scrittura sulla directory di installazione
 - `--region` disponibile su `deploy`, `list`, `delete`, `status --deep` (default: eu-west-1)
 - Messaggi di errore contestuali con suggerimento del comando/flag corretto
 
@@ -105,8 +105,9 @@ cubbit-pages snippets --bucket mio-bucket
 - `internal/config/config.go` — `Resolve()`, `ResolveOpen()`, `Validate()`, `SiteURL()`; `Config.Clean` e `Config.Region`
 - `internal/config/file.go` — load/save `~/.cubbit/pages/config.yaml`; struct `FileConfig` con `LastDeploy`
 - `scripts/add-locale.go` — wizard interattivo per aggiungere locale (build tag `ignore`, solo `go run`/`make add-locale`)
-- `scripts/test-deploy.sh` — integration test: 10 scenari (6 deploy + 3 status --deep + 1 clean)
+- `scripts/test-deploy.sh` — integration test: 10 scenari (6 deploy + 3 status --deep + 1 clean); usa `STATUS_FLAGS` (senza `--public-bucket`) per i test su `status --deep`
 - `scripts/verify-decrypt.mjs` — decryption JS (Web Crypto API) per verifica roundtrip
+- `install.ps1` — installer PowerShell per Windows: rileva arch, scarica binario + SHA256, verifica, installa in `%LOCALAPPDATA%\cubbit-pages\`, aggiunge al PATH utente
 - `CHANGELOG.md` — cronologia release in formato Keep a Changelog
 
 ## Convenzioni
