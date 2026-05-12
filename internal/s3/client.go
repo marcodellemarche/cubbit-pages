@@ -16,15 +16,15 @@ import (
 
 // DeployInfo holds discovered metadata about a deploy found in the bucket.
 type DeployInfo struct {
-	Prefix      string
-	Encrypted   bool
-	Locale      string
-	Version     string
-	Timestamp   time.Time
-	FileCount   int
-	TotalSize   int64
-	URL         string
-	HasMetadata bool
+	Prefix      string    `json:"prefix"`
+	Encrypted   bool      `json:"encrypted"`
+	Locale      string    `json:"locale"`
+	Version     string    `json:"version"`
+	Timestamp   time.Time `json:"timestamp"`
+	FileCount   int       `json:"file_count"`
+	TotalSize   int64     `json:"total_size"`
+	URL         string    `json:"url"`
+	HasMetadata bool      `json:"has_metadata"`
 }
 
 // ObjectInfo holds metadata for a single S3 object.
