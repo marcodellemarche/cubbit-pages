@@ -13,13 +13,22 @@ Zero backend. Zero server. Zero npm dependencies.
 
 ## Installation
 
-### Automatic script
+### Linux / macOS
 
 ```bash
 curl -sSL \
   https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/install.sh \
   | bash
 ```
+
+### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://github.com/marcodellemarche/cubbit-pages/releases/latest/download/install.ps1 | iex"
+```
+
+Installs to `%LOCALAPPDATA%\cubbit-pages\` and adds it to the user PATH.
+To install a specific version: append `-Version v0.6.2` to the command above.
 
 ### Build from source
 
