@@ -22,9 +22,11 @@ CLI Go per deploy di siti statici su Cubbit S3, con cifratura opzionale AES-256-
 ## Uso base
 ```bash
 # Setup interattivo (crea il bucket se non esiste, salva in ~/.cubbit/pages/config.yaml)
-# Chiede: access key, secret key, endpoint, bucket, locale
+# Chiede: profile name, access key, secret key, endpoint, bucket, locale
 # Alla fine fa HeadBucket per verificare la connessione
-cubbit-pages setup
+cubbit-pages setup                        # crea/aggiorna profilo "default"
+cubbit-pages setup --profile staging      # crea/aggiorna profilo "staging"
+cubbit-pages setup --profile production   # crea/aggiorna profilo "production"
 
 # Aggiorna il binario alla release più recente (scarica da GitHub Releases)
 cubbit-pages update
@@ -32,6 +34,7 @@ cubbit-pages update
 # Deploy in chiaro (--clean=true di default: rimuove file S3 non più presenti nella sorgente)
 cubbit-pages deploy ./mio-sito --bucket mio-bucket
 cubbit-pages deploy ./mio-sito --bucket mio-bucket --clean=false  # disabilita clean
+cubbit-pages deploy ./mio-sito --profile staging    # usa profilo "staging" dal config
 
 # Deploy cifrato (password da flag, env var, o prompt interattivo)
 cubbit-pages deploy ./mio-sito --bucket mio-bucket --encrypt --password "parola"
@@ -72,6 +75,7 @@ cubbit-pages snippets --bucket mio-bucket
 - Deploy gestito da `.github/workflows/deploy-site.yml` (secondo step, dopo la landing page)
 
 ## Variabili d'ambiente
+- `CUBBIT_PROFILE` — profilo da usare (sovrascrive il default; sovrascritto da `--profile`)
 - `CUBBIT_ACCESS_KEY`
 - `CUBBIT_SECRET_KEY`
 - `CUBBIT_BUCKET`
@@ -80,6 +84,7 @@ cubbit-pages snippets --bucket mio-bucket
 - `CUBBIT_PASSWORD` — password cifratura (alternativa a `--password` e al prompt interattivo)
 
 ## Comportamenti chiave
+- **Profili named**: `~/.cubbit/pages/config.yaml` usa struttura `profiles: {nome: {access_key, secret_key, bucket, endpoint, locale, last_deploy}}`. Il campo opzionale `default:` a livello root sovrascrive il profilo attivo di default (altrimenti: `"default"`). Priorità risoluzione: `--profile` flag > `CUBBIT_PROFILE` env > `fc.Default` > `"default"`. La migrazione dal vecchio formato flat avviene automaticamente in `LoadFileConfig()`, senza sovrascrivere il file.
 - `open` non richiede credenziali (solo bucket ed endpoint); usa il prefix dell'ultimo deploy come default
 - `delete` senza `--prefix`: warning su stderr, exit 1 su abort (non 0)
 - `list`/`delete`: prefix normalizzato con `strings.Trim` (stessa logica di deploy)
@@ -102,8 +107,8 @@ cubbit-pages snippets --bucket mio-bucket
 - `internal/login/sw.js` — service worker per decryption trasparente di asset .enc
 - `internal/s3/upload.go` — upload con gestione ACL; `DeployMeta` struct; metadata S3 iniettati su `index.html`
 - `internal/s3/client.go` — client S3, `ListObjects` (paginato), `DeleteObjects` (batch 1000), `HeadBucket`; `DiscoverDeploys()` per status --deep; `BuildSiteURL()`
-- `internal/config/config.go` — `Resolve()`, `ResolveOpen()`, `Validate()`, `SiteURL()`; `Config.Clean` e `Config.Region`
-- `internal/config/file.go` — load/save `~/.cubbit/pages/config.yaml`; struct `FileConfig` con `LastDeploy`
+- `internal/config/config.go` — `Resolve()`, `ResolveOpen()`, `Validate()`, `SiteURL()`; `Config.Profile`, `Config.Clean`, `Config.Region`; helper `resolveProfileName()`
+- `internal/config/file.go` — load/save `~/.cubbit/pages/config.yaml`; struct `FileConfig` (con `Profiles map[string]*ProfileConfig` e `Default string`) e `ProfileConfig`; migrazione automatica da formato flat legacy; `GetProfile()`, `SetProfile()`, `ActiveProfileName()`
 - `scripts/add-locale.go` — wizard interattivo per aggiungere locale (build tag `ignore`, solo `go run`/`make add-locale`)
 - `scripts/test-deploy.sh` — integration test: 10 scenari (6 deploy + 3 status --deep + 1 clean); usa `STATUS_FLAGS` (senza `--public-bucket`) per i test su `status --deep`
 - `scripts/verify-decrypt.mjs` — decryption JS (Web Crypto API) per verifica roundtrip

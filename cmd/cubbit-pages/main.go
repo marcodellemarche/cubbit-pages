@@ -53,20 +53,77 @@ func main() {
 }
 
 func setupCmd() *cobra.Command {
-	return &cobra.Command{
+	var profileName string
+	var setDefault bool
+
+	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Interactive setup wizard — saves credentials to ~/.cubbit/pages/config.yaml",
-		RunE:  runSetup,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSetup(profileName, setDefault)
+		},
 	}
+
+	cmd.Flags().StringVar(&profileName, "profile", "", "profile name to create or update (or CUBBIT_PROFILE)")
+	cmd.Flags().BoolVar(&setDefault, "set-default", false, "set this profile as default when no --profile is given")
+
+	return cmd
 }
 
-func runSetup(cmd *cobra.Command, args []string) error {
+func runSetup(profileName string, setDefault bool) error {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	fmt.Println()
 	fmt.Println("Cubbit Pages Setup")
 	fmt.Println(strings.Repeat("─", 18))
 	fmt.Println()
+
+	// Load existing config early to check for existing profiles and preserve LastDeploy.
+	fc, _ := config.LoadFileConfig()
+	if fc == nil {
+		fc = &config.FileConfig{}
+	}
+
+	// Resolve profile name: flag → CUBBIT_PROFILE → ask interactively (default = fc.Default or "default").
+	defaultPrompt := config.DefaultProfileName
+	if fc.Default != "" {
+		defaultPrompt = fc.Default
+	}
+	if profileName == "" {
+		if v := os.Getenv("CUBBIT_PROFILE"); v != "" {
+			profileName = v
+		} else {
+			fmt.Printf("? Profile [%s]: ", defaultPrompt)
+			if !scanner.Scan() {
+				return fmt.Errorf("aborted")
+			}
+			profileName = strings.TrimSpace(scanner.Text())
+			if profileName == "" {
+				profileName = defaultPrompt
+			}
+		}
+	}
+
+	if !isValidProfileName(profileName) {
+		return fmt.Errorf("invalid profile name %q: use letters, digits, hyphens, or underscores; start with a letter or digit; max 63 chars", profileName)
+	}
+
+	fmt.Printf("\n  Setting up profile: %q\n\n", profileName)
+
+	// Ask for confirmation when updating an existing profile with credentials.
+	if existing := fc.GetProfile(profileName); existing != nil && existing.AccessKey != "" {
+		fmt.Printf("  Profile %q already exists (bucket: %s)\n", profileName, existing.Bucket)
+		fmt.Print("  Overwrite? (y/N) ")
+		if !scanner.Scan() {
+			return fmt.Errorf("aborted")
+		}
+		answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		fmt.Println()
+		if answer != "y" && answer != "yes" {
+			fmt.Println("  Keeping existing profile.")
+			return nil
+		}
+	}
 
 	fmt.Print("? Access Key: ")
 	if !scanner.Scan() {
@@ -181,19 +238,33 @@ bucketOK:
 	}
 	fmt.Println()
 
-	fc := &config.FileConfig{
+	pc := &config.ProfileConfig{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 		Bucket:    bucket,
 		Endpoint:  endpoint,
 		Locale:    locale,
 	}
+	// Preserve existing LastDeploy when updating a profile.
+	if existing := fc.GetProfile(profileName); existing != nil && existing.LastDeploy != nil {
+		pc.LastDeploy = existing.LastDeploy
+	}
+	fc.SetProfile(profileName, pc)
+
+	if setDefault {
+		fc.Default = profileName
+	}
+
 	if err := config.SaveFileConfig(fc); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
 	configPath, _ := config.ConfigFilePath()
 	fmt.Printf("  Config saved to %s\n", configPath)
+	fmt.Printf("  Profile: %s\n", profileName)
+	if setDefault {
+		fmt.Printf("  Default profile set to: %s\n", profileName)
+	}
 
 	fmt.Print("\n  Verifying connection... ")
 	verifyClient, err := s3client.NewClient(endpoint, accessKey, secretKey, config.DefaultRegion, bucket)
@@ -210,10 +281,34 @@ bucketOK:
 
 	fmt.Println()
 	fmt.Println("  Done! Try:")
-	fmt.Printf("    cubbit-pages deploy ./my-site\n")
+	if profileName == config.DefaultProfileName {
+		fmt.Printf("    cubbit-pages deploy ./my-site\n")
+	} else {
+		fmt.Printf("    cubbit-pages deploy ./my-site --profile %s\n", profileName)
+	}
 	fmt.Println()
 
 	return nil
+}
+
+// isValidProfileName checks that name is safe to use as a profile key.
+func isValidProfileName(name string) bool {
+	if len(name) == 0 || len(name) > 63 {
+		return false
+	}
+	for i, r := range name {
+		isAlnum := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+		if i == 0 {
+			if !isAlnum {
+				return false
+			}
+		} else {
+			if !isAlnum && r != '-' && r != '_' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func deployCmd() *cobra.Command {
@@ -244,15 +339,17 @@ func deployCmd() *cobra.Command {
 				cfg.Password = pwd
 			}
 
-			if cfg.Locale != "" && !login.IsKnownLocale(cfg.Locale) {
-				return fmt.Errorf("unknown locale %q (available: %v)", cfg.Locale, login.KnownLocales())
-			}
-
 			if err := cfg.Resolve(); err != nil {
 				return err
 			}
 
+			// Validate locale after resolution so profile-supplied locales are also checked.
+			if !login.IsKnownLocale(cfg.Locale) {
+				return fmt.Errorf("unknown locale %q (available: %v)", cfg.Locale, login.KnownLocales())
+			}
+
 			fmt.Printf("\nDeploying to s3://%s/\n", cfg.Bucket)
+			fmt.Printf("Profile:  %s\n", cfg.Profile)
 			if cfg.Encrypt {
 				fmt.Println("Mode: encrypted (AES-256-GCM)")
 			} else {
@@ -295,13 +392,23 @@ func deployCmd() *cobra.Command {
 			}
 			fmt.Printf("URL: %s\n", result.SiteURL)
 
-			// Persist last deploy metadata (create config file if it doesn't exist yet).
+			// Persist last deploy metadata to the active profile.
 			if !cfg.DryRun {
 				fc, _ := config.LoadFileConfig()
 				if fc == nil {
 					fc = &config.FileConfig{}
 				}
-				fc.LastDeploy = &config.LastDeploy{
+				pc := fc.GetProfile(cfg.Profile)
+				if pc == nil {
+					// No profile entry yet (user used flags/env vars without setup).
+					// Create a minimal entry with non-sensitive fields so status is useful.
+					pc = &config.ProfileConfig{
+						Bucket:   cfg.Bucket,
+						Endpoint: cfg.Endpoint,
+						Locale:   cfg.Locale,
+					}
+				}
+				pc.LastDeploy = &config.LastDeploy{
 					Bucket:    cfg.Bucket,
 					Prefix:    cfg.Prefix,
 					URL:       result.SiteURL,
@@ -309,6 +416,7 @@ func deployCmd() *cobra.Command {
 					Encrypted: cfg.Encrypt,
 					Date:      time.Now().UTC(),
 				}
+				fc.SetProfile(cfg.Profile, pc)
 				_ = config.SaveFileConfig(fc)
 			}
 
@@ -322,6 +430,7 @@ func deployCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&cfg.Profile, "profile", "", "config profile to use (or CUBBIT_PROFILE)")
 	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
 	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
 	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
@@ -405,11 +514,15 @@ func statusCmd() *cobra.Command {
 				return fmt.Errorf("reading config: %w", err)
 			}
 
+			// ActiveProfileName is nil-safe — works even when fc == nil.
+			profileName := fc.ActiveProfileName(cfg.Profile)
+
 			var inventory []s3client.DeployInfo
 			if deep {
 				if err := cfg.Resolve(); err != nil {
 					return fmt.Errorf("--deep requires credentials: %w", err)
 				}
+				profileName = cfg.Profile
 				client, err := s3client.NewClient(cfg.Endpoint, cfg.AccessKey, cfg.SecretKey, cfg.Region, cfg.Bucket)
 				if err != nil {
 					return err
@@ -421,7 +534,7 @@ func statusCmd() *cobra.Command {
 			}
 
 			if asJSON {
-				return printStatusJSON(fc, inventory)
+				return printStatusJSON(fc, profileName, inventory)
 			}
 
 			configPath, _ := config.ConfigFilePath()
@@ -433,42 +546,59 @@ func statusCmd() *cobra.Command {
 				fmt.Println("  No config file found. Run `cubbit-pages setup` to get started.")
 				fmt.Println()
 			} else {
-				endpoint := fc.Endpoint
-				if endpoint == "" {
-					endpoint = config.DefaultEndpoint
-				}
-				locale := fc.Locale
-				if locale == "" {
-					locale = "en"
-				}
-				fmt.Printf("  %-12s %s\n", "Bucket:", fc.Bucket)
-				fmt.Printf("  %-12s %s\n", "Endpoint:", endpoint)
-				fmt.Printf("  %-12s %s\n", "Locale:", locale)
-
-				if fc.LastDeploy != nil {
-					ld := fc.LastDeploy
-					mode := "plaintext"
-					if ld.Encrypted {
-						mode = "encrypted (AES-256-GCM)"
+				pc := fc.GetProfile(profileName)
+				if pc == nil {
+					available := fc.ProfileNames()
+					msg := fmt.Sprintf("  Profile %q not found.", profileName)
+					if len(available) > 0 {
+						msg += fmt.Sprintf(" Available: %s.", strings.Join(available, ", "))
 					}
-					prefix := ld.Prefix
-					if prefix == "" {
-						prefix = "(root)"
-					}
+					fmt.Println(msg)
+					fmt.Printf("  Run `cubbit-pages setup --profile %s` to create it.\n", profileName)
 					fmt.Println()
-					fmt.Println("  Last deploy")
-					fmt.Println("  " + strings.Repeat("─", 44))
-					fmt.Printf("  %-12s %s\n", "Bucket:", ld.Bucket)
-					fmt.Printf("  %-12s %s\n", "Prefix:", prefix)
-					fmt.Printf("  %-12s %d\n", "Files:", ld.Files)
-					fmt.Printf("  %-12s %s\n", "Mode:", mode)
-					fmt.Printf("  %-12s %s\n", "Date:", ld.Date.Local().Format("2006-01-02 15:04"))
-					fmt.Printf("  %-12s %s\n", "URL:", ld.URL)
 				} else {
+					endpoint := pc.Endpoint
+					if endpoint == "" {
+						endpoint = config.DefaultEndpoint
+					}
+					locale := pc.Locale
+					if locale == "" {
+						locale = "en"
+					}
+					profilesLine := profileName
+					if names := fc.ProfileNames(); len(names) > 1 {
+						profilesLine = fmt.Sprintf("%s  (%d profiles: %s)", profileName, len(names), strings.Join(names, ", "))
+					}
+					fmt.Printf("  %-12s %s\n", "Profile:", profilesLine)
+					fmt.Printf("  %-12s %s\n", "Bucket:", pc.Bucket)
+					fmt.Printf("  %-12s %s\n", "Endpoint:", endpoint)
+					fmt.Printf("  %-12s %s\n", "Locale:", locale)
+
+					if pc.LastDeploy != nil {
+						ld := pc.LastDeploy
+						mode := "plaintext"
+						if ld.Encrypted {
+							mode = "encrypted (AES-256-GCM)"
+						}
+						prefix := ld.Prefix
+						if prefix == "" {
+							prefix = "(root)"
+						}
+						fmt.Println()
+						fmt.Println("  Last deploy")
+						fmt.Println("  " + strings.Repeat("─", 44))
+						fmt.Printf("  %-12s %s\n", "Bucket:", ld.Bucket)
+						fmt.Printf("  %-12s %s\n", "Prefix:", prefix)
+						fmt.Printf("  %-12s %d\n", "Files:", ld.Files)
+						fmt.Printf("  %-12s %s\n", "Mode:", mode)
+						fmt.Printf("  %-12s %s\n", "Date:", ld.Date.Local().Format("2006-01-02 15:04"))
+						fmt.Printf("  %-12s %s\n", "URL:", ld.URL)
+					} else {
+						fmt.Println()
+						fmt.Println("  No deploy recorded yet. Run `cubbit-pages deploy` to get started.")
+					}
 					fmt.Println()
-					fmt.Println("  No deploy recorded yet. Run `cubbit-pages deploy` to get started.")
 				}
-				fmt.Println()
 			}
 
 			if !deep {
@@ -512,6 +642,7 @@ func statusCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&cfg.Profile, "profile", "", "config profile to use (or CUBBIT_PROFILE)")
 	cmd.Flags().BoolVar(&deep, "deep", false, "query S3 for full deploy inventory (requires credentials)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output as JSON (machine-readable)")
 	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
@@ -524,34 +655,41 @@ func statusCmd() *cobra.Command {
 }
 
 type statusJSON struct {
-	Config     *statusJSONConfig  `json:"config,omitempty"`
-	LastDeploy *config.LastDeploy `json:"last_deploy,omitempty"`
+	Config     *statusJSONConfig     `json:"config,omitempty"`
+	LastDeploy *config.LastDeploy    `json:"last_deploy,omitempty"`
 	Inventory  []s3client.DeployInfo `json:"inventory,omitempty"`
 }
 
 type statusJSONConfig struct {
-	Bucket   string `json:"bucket"`
-	Endpoint string `json:"endpoint"`
-	Locale   string `json:"locale"`
+	Profile  string   `json:"profile"`
+	Profiles []string `json:"profiles,omitempty"`
+	Bucket   string   `json:"bucket"`
+	Endpoint string   `json:"endpoint"`
+	Locale   string   `json:"locale"`
 }
 
-func printStatusJSON(fc *config.FileConfig, inventory []s3client.DeployInfo) error {
+func printStatusJSON(fc *config.FileConfig, profileName string, inventory []s3client.DeployInfo) error {
 	out := statusJSON{Inventory: inventory}
 	if fc != nil {
-		endpoint := fc.Endpoint
-		if endpoint == "" {
-			endpoint = config.DefaultEndpoint
+		pc := fc.GetProfile(profileName)
+		if pc != nil {
+			endpoint := pc.Endpoint
+			if endpoint == "" {
+				endpoint = config.DefaultEndpoint
+			}
+			locale := pc.Locale
+			if locale == "" {
+				locale = "en"
+			}
+			out.Config = &statusJSONConfig{
+				Profile:  profileName,
+				Profiles: fc.ProfileNames(),
+				Bucket:   pc.Bucket,
+				Endpoint: endpoint,
+				Locale:   locale,
+			}
+			out.LastDeploy = pc.LastDeploy
 		}
-		locale := fc.Locale
-		if locale == "" {
-			locale = "en"
-		}
-		out.Config = &statusJSONConfig{
-			Bucket:   fc.Bucket,
-			Endpoint: endpoint,
-			Locale:   locale,
-		}
-		out.LastDeploy = fc.LastDeploy
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -575,6 +713,7 @@ func openCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&cfg.Profile, "profile", "", "config profile to use (or CUBBIT_PROFILE)")
 	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
 	cmd.Flags().StringVar(&cfg.Endpoint, "endpoint", "", "S3 endpoint (default: https://s3.cubbit.eu)")
 	cmd.Flags().StringVar(&cfg.Prefix, "prefix", "", "S3 key prefix")
@@ -634,6 +773,7 @@ func listCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&cfg.Profile, "profile", "", "config profile to use (or CUBBIT_PROFILE)")
 	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
 	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
 	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")
@@ -710,6 +850,7 @@ func deleteCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&cfg.Profile, "profile", "", "config profile to use (or CUBBIT_PROFILE)")
 	cmd.Flags().StringVarP(&cfg.Bucket, "bucket", "b", "", "bucket name (or CUBBIT_BUCKET)")
 	cmd.Flags().StringVar(&cfg.AccessKey, "access-key", "", "Cubbit access key (or CUBBIT_ACCESS_KEY)")
 	cmd.Flags().StringVar(&cfg.SecretKey, "secret-key", "", "Cubbit secret key (or CUBBIT_SECRET_KEY)")

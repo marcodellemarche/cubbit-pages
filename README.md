@@ -115,6 +115,47 @@ Deploy complete: 0 file(s) uploaded
 URL: https://my-bucket.s3.cubbit.eu/index.html
 ```
 
+### Multiple profiles
+
+Save credentials for different environments (e.g. staging, production) as named profiles:
+
+```bash
+# Create profiles interactively
+cubbit-pages setup                        # creates/updates "default" profile
+cubbit-pages setup --profile staging
+cubbit-pages setup --profile production
+
+# Use a specific profile
+cubbit-pages deploy ./my-site --profile production
+cubbit-pages status --profile staging
+cubbit-pages list --profile production
+
+# Select profile via environment variable
+export CUBBIT_PROFILE=production
+cubbit-pages deploy ./my-site
+```
+
+Profiles are stored in `~/.cubbit/pages/config.yaml`:
+
+```yaml
+profiles:
+  default:
+    access_key: ...
+    secret_key: ...
+    bucket: my-bucket
+    endpoint: https://s3.cubbit.eu
+    locale: en
+  production:
+    access_key: ...
+    secret_key: ...
+    bucket: prod-bucket
+    locale: it
+```
+
+Existing config files in the old flat format are migrated automatically on first read — no manual action needed.
+
+You can set a different default profile by adding `default: production` at the top of the config file. This overrides the `default` profile name when no `--profile` flag or `CUBBIT_PROFILE` is given.
+
 ### Environment variables
 
 All credentials can be passed via env (overrides config file):
@@ -125,11 +166,12 @@ export CUBBIT_SECRET_KEY=...
 export CUBBIT_BUCKET=my-bucket
 export CUBBIT_PASSWORD=my-secret-password  # for encrypted deploys
 export CUBBIT_LOCALE=it                    # login page language
+export CUBBIT_PROFILE=production           # select active profile
 
 cubbit-pages deploy ./my-site --encrypt
 ```
 
-Priority: CLI flags > environment variables > `~/.cubbit/pages/config.yaml`
+Priority: CLI flags > environment variables > active profile in `~/.cubbit/pages/config.yaml`
 
 ### Check current config and last deploy
 
@@ -245,6 +287,7 @@ This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.)
 
 | Flag | Description |
 |------|-------------|
+| `--profile` | Config profile to use (or `CUBBIT_PROFILE`; default: `default`) |
 | `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
 | `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
 | `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
@@ -261,12 +304,17 @@ This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.)
 
 ### `cubbit-pages setup`
 
-Interactive wizard. Prompts for Access Key, Secret Key, Endpoint, Bucket, and login page locale. Creates the bucket if it doesn't exist. Verifies the connection with `HeadBucket`. Saves to `~/.cubbit/pages/config.yaml` (mode 0600).
+Interactive wizard. Prompts for Profile name, Access Key, Secret Key, Endpoint, Bucket, and login page locale. Creates the bucket if it doesn't exist. Verifies the connection with `HeadBucket`. Saves the profile to `~/.cubbit/pages/config.yaml` (mode 0600).
+
+| Flag | Description |
+|------|-------------|
+| `--profile` | Profile name to create or update (or `CUBBIT_PROFILE`; prompted interactively if omitted) |
 
 ### `cubbit-pages status`
 
 | Flag | Description |
 |------|-------------|
+| `--profile` | Config profile to use (or `CUBBIT_PROFILE`; default: `default`) |
 | `--deep` | Query S3 for full deploy inventory (requires credentials) |
 | `--json` | Output as JSON (machine-readable; works with or without `--deep`) |
 | `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) — needed for `--deep` without config file |
@@ -291,6 +339,7 @@ If the binary is in a system directory (e.g. `/usr/local/bin`), run with `sudo`.
 
 | Flag | Description |
 |------|-------------|
+| `--profile` | Config profile to use (or `CUBBIT_PROFILE`; default: `default`) |
 | `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
 | `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
 | `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
@@ -301,6 +350,7 @@ If the binary is in a system directory (e.g. `/usr/local/bin`), run with `sudo`.
 
 | Flag | Description |
 |------|-------------|
+| `--profile` | Config profile to use (or `CUBBIT_PROFILE`; default: `default`) |
 | `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
 | `--access-key` | API key (or `CUBBIT_ACCESS_KEY`) |
 | `--secret-key` | Secret key (or `CUBBIT_SECRET_KEY`) |
@@ -314,6 +364,7 @@ Exits with code 1 if the user aborts the confirmation.
 
 | Flag | Description |
 |------|-------------|
+| `--profile` | Config profile to use (or `CUBBIT_PROFILE`; default: `default`) |
 | `--bucket`, `-b` | Bucket name (or `CUBBIT_BUCKET`) |
 | `--endpoint` | S3 endpoint |
 | `--prefix` | S3 key prefix (defaults to the prefix of the last deploy) |

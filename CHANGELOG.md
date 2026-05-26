@@ -3,6 +3,18 @@
 All notable changes to cubbit-pages are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **Named profiles** (`--profile` / `CUBBIT_PROFILE`): `~/.cubbit/pages/config.yaml` now supports multiple credential sets under named profiles (similar to AWS CLI profiles). All commands that require credentials accept `--profile <name>`; without it, the `default` profile is used.
+- `setup --profile <name>`: create or update a named profile interactively without touching other profiles. Profile name is prompted interactively when not provided via flag or `CUBBIT_PROFILE`.
+- `status` now shows the active profile name and, when multiple profiles exist, lists all profile names.
+- `status --json` output includes a `"profile"` field in the `config` object.
+- `CUBBIT_PROFILE` environment variable to select the active profile (overridden by `--profile`).
+- Automatic migration of the legacy flat config format to the `profiles:` structure on first read — no manual action required.
+
+---
+
 ## [1.0.0] — 2026-05-12
 
 ### Added

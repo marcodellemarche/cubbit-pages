@@ -15,6 +15,7 @@ const (
 
 // Config holds all configuration for a deploy operation.
 type Config struct {
+	Profile      string
 	Bucket       string
 	AccessKey    string
 	SecretKey    string
@@ -32,16 +33,27 @@ type Config struct {
 }
 
 // Resolve fills in missing config values from (lowest to highest priority):
-// config file → environment variables → CLI flags (already set on c).
+// config file (selected profile) → environment variables → CLI flags (already set on c).
+// After Resolve, c.Profile holds the resolved profile name.
 func (c *Config) Resolve() error {
-	// Load file config as base
-	fileCfg, _ := LoadFileConfig()
+	fileCfg, err := LoadFileConfig()
+	if err != nil {
+		return fmt.Errorf("cannot read config file: %w", err)
+	}
+
+	profileName := fileCfg.ActiveProfileName(c.Profile)
+	c.Profile = profileName
+
+	pc, err := resolveProfile(fileCfg, profileName)
+	if err != nil {
+		return err
+	}
 
 	if c.Endpoint == "" {
 		if v := os.Getenv("CUBBIT_ENDPOINT"); v != "" {
 			c.Endpoint = v
-		} else if fileCfg != nil && fileCfg.Endpoint != "" {
-			c.Endpoint = fileCfg.Endpoint
+		} else if pc != nil && pc.Endpoint != "" {
+			c.Endpoint = pc.Endpoint
 		} else {
 			c.Endpoint = DefaultEndpoint
 		}
@@ -50,24 +62,24 @@ func (c *Config) Resolve() error {
 	if c.AccessKey == "" {
 		if v := os.Getenv("CUBBIT_ACCESS_KEY"); v != "" {
 			c.AccessKey = v
-		} else if fileCfg != nil {
-			c.AccessKey = fileCfg.AccessKey
+		} else if pc != nil {
+			c.AccessKey = pc.AccessKey
 		}
 	}
 
 	if c.SecretKey == "" {
 		if v := os.Getenv("CUBBIT_SECRET_KEY"); v != "" {
 			c.SecretKey = v
-		} else if fileCfg != nil {
-			c.SecretKey = fileCfg.SecretKey
+		} else if pc != nil {
+			c.SecretKey = pc.SecretKey
 		}
 	}
 
 	if c.Bucket == "" {
 		if v := os.Getenv("CUBBIT_BUCKET"); v != "" {
 			c.Bucket = v
-		} else if fileCfg != nil {
-			c.Bucket = fileCfg.Bucket
+		} else if pc != nil {
+			c.Bucket = pc.Bucket
 		}
 	}
 
@@ -88,8 +100,8 @@ func (c *Config) Resolve() error {
 	if c.Locale == "" {
 		if v := os.Getenv("CUBBIT_LOCALE"); v != "" {
 			c.Locale = v
-		} else if fileCfg != nil && fileCfg.Locale != "" {
-			c.Locale = fileCfg.Locale
+		} else if pc != nil && pc.Locale != "" {
+			c.Locale = pc.Locale
 		} else {
 			c.Locale = "en"
 		}
@@ -123,14 +135,23 @@ func (c *Config) Validate() error {
 
 // ResolveOpen fills only bucket and endpoint — the two fields needed by the open
 // command to build a URL. Does not require or validate credentials.
+// After ResolveOpen, c.Profile holds the resolved profile name.
 func (c *Config) ResolveOpen() {
-	fileCfg, _ := LoadFileConfig()
+	fileCfg, err := LoadFileConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: cannot read config file: %v\n", err)
+	}
+
+	profileName := fileCfg.ActiveProfileName(c.Profile)
+	c.Profile = profileName
+
+	pc := fileCfg.GetProfile(profileName)
 
 	if c.Endpoint == "" {
 		if v := os.Getenv("CUBBIT_ENDPOINT"); v != "" {
 			c.Endpoint = v
-		} else if fileCfg != nil && fileCfg.Endpoint != "" {
-			c.Endpoint = fileCfg.Endpoint
+		} else if pc != nil && pc.Endpoint != "" {
+			c.Endpoint = pc.Endpoint
 		} else {
 			c.Endpoint = DefaultEndpoint
 		}
@@ -139,14 +160,14 @@ func (c *Config) ResolveOpen() {
 	if c.Bucket == "" {
 		if v := os.Getenv("CUBBIT_BUCKET"); v != "" {
 			c.Bucket = v
-		} else if fileCfg != nil {
-			c.Bucket = fileCfg.Bucket
+		} else if pc != nil {
+			c.Bucket = pc.Bucket
 		}
 	}
 
 	// Fall back to the prefix of the last successful deploy when none is given.
-	if c.Prefix == "" && fileCfg != nil && fileCfg.LastDeploy != nil {
-		c.Prefix = fileCfg.LastDeploy.Prefix
+	if c.Prefix == "" && pc != nil && pc.LastDeploy != nil {
+		c.Prefix = pc.LastDeploy.Prefix
 	}
 
 	c.Prefix = strings.Trim(c.Prefix, "/")
@@ -164,4 +185,24 @@ func (c *Config) SiteURL() string {
 		return fmt.Sprintf("%s/%s/%sindex.html", c.Endpoint, c.Bucket, prefix)
 	}
 	return fmt.Sprintf("%s://%s.%s/%sindex.html", u.Scheme, c.Bucket, u.Host, prefix)
+}
+
+// resolveProfile returns the ProfileConfig for profileName from fc.
+// Returns an actionable error when an explicitly-named profile (anything other than
+// DefaultProfileName) is not found in the config file.
+func resolveProfile(fc *FileConfig, profileName string) (*ProfileConfig, error) {
+	if fc == nil {
+		return nil, nil
+	}
+	pc := fc.GetProfile(profileName)
+	if pc == nil && profileName != DefaultProfileName {
+		available := fc.ProfileNames()
+		if len(available) > 0 {
+			return nil, fmt.Errorf("profile %q not found — available: %s\nrun: cubbit-pages setup --profile %s",
+				profileName, strings.Join(available, ", "), profileName)
+		}
+		return nil, fmt.Errorf("profile %q not found — run: cubbit-pages setup --profile %s",
+			profileName, profileName)
+	}
+	return pc, nil
 }
