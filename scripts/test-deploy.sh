@@ -109,6 +109,28 @@ verify_decrypt() {
     FAIL=$((FAIL + 1))
   fi
 
+  # Check manifest (_manifest.json) exists and lists the encrypted assets
+  local manifest_key="${key_prefix}_manifest.json"
+  local manifest_file="$TMPDIR/verify_${label}_manifest.json"
+  local manifest_err
+  echo -n "  ${label} (manifest) ... "
+  if manifest_err=$(AWS_ACCESS_KEY_ID="$AK" AWS_SECRET_ACCESS_KEY="$SK" \
+        aws s3 cp "s3://$BUCKET/$manifest_key" "$manifest_file" "${S3_FLAGS[@]}" 2>&1) \
+     && manifest_err=$(node -e '
+          const m=require(process.argv[1]);
+          if(typeof m.total!=="number"||m.total<=0)throw new Error("bad total");
+          if(!m.files||typeof m.files!=="object")throw new Error("bad files");
+          const sum=Object.values(m.files).reduce((a,b)=>a+b,0);
+          if(sum!==m.total)throw new Error("total "+m.total+" != sum "+sum);
+          if(!m.files["about.html.enc"])throw new Error("missing about.html.enc");
+        ' "$manifest_file" 2>&1); then
+    echo "OK"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL — $manifest_err"
+    FAIL=$((FAIL + 1))
+  fi
+
   # Check about.html.enc decrypts to match original about.html
   local asset_key="${key_prefix}about.html.enc"
   local asset_file="$TMPDIR/verify_${label}_about.enc"

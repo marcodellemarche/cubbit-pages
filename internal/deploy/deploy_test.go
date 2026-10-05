@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,14 +16,14 @@ func createTestSite(t *testing.T) string {
 	dir := t.TempDir()
 
 	files := map[string]string{
-		"index.html":        "<html><body>Home</body></html>",
-		"about.html":        "<html><body>About</body></html>",
-		"css/style.css":     "body { color: red; }",
-		"js/app.js":         "console.log('hello');",
-		"images/logo.png":   "fakepng",
-		".gitignore":        "node_modules",
-		".DS_Store":         "",
-		"sub/page.html":     "<html><body>Sub</body></html>",
+		"index.html":      "<html><body>Home</body></html>",
+		"about.html":      "<html><body>About</body></html>",
+		"css/style.css":   "body { color: red; }",
+		"js/app.js":       "console.log('hello');",
+		"images/logo.png": "fakepng",
+		".gitignore":      "node_modules",
+		".DS_Store":       "",
+		"sub/page.html":   "<html><body>Sub</body></html>",
 	}
 
 	for name, content := range files {
@@ -125,8 +126,8 @@ func TestDryRunEncryptedDeploy(t *testing.T) {
 		fileSet[f] = true
 	}
 
-	// Must have: index.html (login page), sw.js, _verify.enc
-	for _, required := range []string{"index.html", "sw.js", "_verify.enc"} {
+	// Must have: index.html (login page), sw.js, _verify.enc, _manifest.json
+	for _, required := range []string{"index.html", "sw.js", "_verify.enc", "_manifest.json"} {
 		if !fileSet[required] {
 			t.Fatalf("encrypted deploy missing %s", required)
 		}
@@ -149,11 +150,11 @@ func TestDryRunEncryptedDeploy(t *testing.T) {
 	}
 
 	// Verify exact total count:
-	// 3 generated (index.html, sw.js, _verify.enc)
+	// 4 generated (index.html, sw.js, _verify.enc, _manifest.json)
 	// + 6 .enc files (one per source file)
 	// + 2 loaders (about.html, sub/page.html)
-	// = 11
-	expected := 3 + len(files) + 2 // 2 non-index HTML loaders
+	// = 12
+	expected := 4 + len(files) + 2 // 2 non-index HTML loaders
 	if len(result.Files) != expected {
 		t.Fatalf("expected %d files in encrypted dry run, got %d: %v", expected, len(result.Files), result.Files)
 	}
@@ -321,11 +322,11 @@ func TestEncryptedDeployWithMockUploader(t *testing.T) {
 	}
 
 	// --- Verify exact file count ---
-	// 3 generated (index.html, sw.js, _verify.enc)
+	// 4 generated (index.html, sw.js, _verify.enc, _manifest.json)
 	// + 6 .enc files
 	// + 2 loaders (about.html, sub/page.html)
-	// = 11
-	expectedCount := 3 + len(files) + 2
+	// = 12
+	expectedCount := 4 + len(files) + 2
 	if result.FilesUploaded != expectedCount {
 		t.Fatalf("expected exactly %d uploads, got %d", expectedCount, result.FilesUploaded)
 	}
@@ -398,6 +399,94 @@ func TestEncryptedFilesAreDecryptable(t *testing.T) {
 // that .enc files uploaded during deploy are actually valid and decryptable.
 func decryptTestData(data []byte, password string) ([]byte, error) {
 	return crypto.Decrypt(data, password)
+}
+
+func TestEncryptedDeployManifest(t *testing.T) {
+	dir := createTestSite(t)
+	files, err := WalkDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	uploaded := make(map[string][]byte)
+	mockUpload := func(ctx context.Context, key string, data []byte) error {
+		uploaded[key] = data
+		return nil
+	}
+
+	opts := Options{
+		SourceDir:   dir,
+		Endpoint:    "https://s3.cubbit.eu",
+		Bucket:      "test-bucket",
+		Encrypt:     true,
+		Password:    "test-password",
+		Concurrency: 1,
+	}
+
+	if _, err := runWithUploader(context.Background(), files, opts, mockUpload); err != nil {
+		t.Fatalf("deploy failed: %v", err)
+	}
+
+	manifestData, ok := uploaded["_manifest.json"]
+	if !ok {
+		t.Fatal("missing _manifest.json in encrypted deploy")
+	}
+
+	var manifest struct {
+		Total int64            `json:"total"`
+		Files map[string]int64 `json:"files"`
+	}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+
+	// Every encrypted asset must be listed, and its size must match the upload.
+	var sum int64
+	for _, f := range files {
+		encKey := f.RelPath + ".enc"
+		size, ok := manifest.Files[encKey]
+		if !ok {
+			t.Fatalf("manifest missing entry for %s", encKey)
+		}
+		if size != int64(len(uploaded[encKey])) {
+			t.Fatalf("manifest size for %s = %d, want %d", encKey, size, len(uploaded[encKey]))
+		}
+		sum += size
+	}
+
+	// The manifest total must equal the sum of encrypted asset sizes.
+	if manifest.Total != sum {
+		t.Fatalf("manifest total = %d, want %d", manifest.Total, sum)
+	}
+
+	// The manifest must NOT list itself, the login page, sw.js, or the canary.
+	for _, k := range []string{"_manifest.json", "index.html", "sw.js", "_verify.enc"} {
+		if _, ok := manifest.Files[k]; ok {
+			t.Fatalf("manifest should not list %s", k)
+		}
+	}
+}
+
+func TestPlainDeployHasNoManifest(t *testing.T) {
+	dir := createTestSite(t)
+	files, err := WalkDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	uploaded := make(map[string][]byte)
+	mockUpload := func(ctx context.Context, key string, data []byte) error {
+		uploaded[key] = data
+		return nil
+	}
+
+	opts := Options{SourceDir: dir, Endpoint: "https://s3.cubbit.eu", Bucket: "b", Concurrency: 1}
+	if _, err := runWithUploader(context.Background(), files, opts, mockUpload); err != nil {
+		t.Fatalf("deploy failed: %v", err)
+	}
+	if _, ok := uploaded["_manifest.json"]; ok {
+		t.Fatal("plain deploy should not include _manifest.json")
+	}
 }
 
 func TestWalkDirUsesForwardSlashes(t *testing.T) {

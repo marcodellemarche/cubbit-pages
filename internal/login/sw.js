@@ -14,6 +14,95 @@ var DB_NAME = 'cubbit-pages';
 var DB_STORE = 'auth';
 var DB_KEY = 'password';
 
+// --- Download/decrypt progress ---
+// _manifest.json (generated at deploy time) lists the encrypted assets and
+// their sizes plus a total. As the SW streams/decrypts each asset we add its
+// bytes to progress.received, capped at the size declared in the manifest, so
+// the overlay can show "Loading 13.2 MB / 50.1 MB". Capping also prevents a
+// resource fetched twice (e.g. an <img> plus a JS fetch) from double-counting.
+var manifest = null;
+var counted = {}; // manifest key ("path.ext.enc") -> bytes counted so far
+var progress = { received: 0, total: 0 };
+
+function resetProgress() {
+  counted = {};
+  progress = { received: 0, total: manifest && manifest.total ? manifest.total : 0 };
+}
+
+function loadManifest() {
+  return fetch('_manifest.json').then(function(r) {
+    if (!r.ok) throw new Error('no manifest');
+    return r.json();
+  }).then(function(m) {
+    manifest = m;
+    progress.total = m && m.total ? m.total : 0;
+    return m;
+  }).catch(function() {
+    manifest = null;
+    return null;
+  });
+}
+
+function relKeyFromUrl(u) {
+  var path = new URL(u).pathname;
+  var scopePath = new URL(self.registration.scope).pathname;
+  if (path.indexOf(scopePath) === 0) path = path.slice(scopePath.length);
+  return path;
+}
+
+// Manifest keys always carry the .enc extension; accept either form.
+function encKey(relKey) {
+  return relKey.slice(-4) === '.enc' ? relKey : relKey + '.enc';
+}
+
+function declaredSize(key) {
+  if (!manifest || !manifest.files) return 0;
+  var s = manifest.files[key];
+  return typeof s === 'number' ? s : 0;
+}
+
+// addBytes credits n bytes to a resource, never exceeding its declared size.
+function addBytes(relKey, n) {
+  if (!manifest || !manifest.files || n <= 0) return;
+  var key = encKey(relKey);
+  var declared = declaredSize(key);
+  if (declared === 0) return;
+  var have = counted[key] || 0;
+  var room = declared - have;
+  if (room <= 0) return;
+  if (n > room) n = room;
+  counted[key] = have + n;
+  progress.received += n;
+}
+
+// Read a response body chunk by chunk, crediting each chunk to progress as it
+// arrives, so the overlay shows bytes accumulating instead of jumping at the
+// end. Returns the full body as a Uint8Array.
+function readWithProgress(response, relKey) {
+  if (!response.body || !response.body.getReader) {
+    return response.arrayBuffer().then(function(b) { return new Uint8Array(b); });
+  }
+  var reader = response.body.getReader();
+  var chunks = [];
+  var total = 0;
+  function pump() {
+    return reader.read().then(function(res) {
+      if (res.done) {
+        var out = new Uint8Array(total);
+        var off = 0;
+        for (var i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
+        return out;
+      }
+      var chunk = res.value;
+      chunks.push(chunk);
+      total += chunk.length;
+      addBytes(relKey, chunk.length);
+      return pump();
+    });
+  }
+  return pump();
+}
+
 // --- IndexedDB persistence for password ---
 // The SW can be terminated by the browser at any time. When restarted,
 // the in-memory password variable is null. We persist to IndexedDB
@@ -153,6 +242,8 @@ self.addEventListener('message', function(e) {
     savePassword(password);
     // Clear cached decrypted files when password changes
     caches.delete(CACHE_NAME);
+    resetProgress();
+    loadManifest();
     // Confirm via MessageChannel port if available, else via source
     var reply = { type: 'PASSWORD_SET' };
     if (e.ports && e.ports[0]) {
@@ -165,17 +256,42 @@ self.addEventListener('message', function(e) {
     password = null;
     clearPassword();
     caches.delete(CACHE_NAME);
+    resetProgress();
+  }
+  if (e.data && e.data.type === 'ADD_BYTES') {
+    // The initial page is fetched directly by the login/loader page (not
+    // through this SW), so it reports its own key and byte count here.
+    // Make sure the manifest is loaded before crediting, otherwise the bytes
+    // would be dropped (the message can arrive before loadManifest resolves).
+    var bytes = e.data.bytes || 0;
+    var key = e.data.key;
+    var apply = function() { if (key) addBytes(key, bytes); };
+    if (manifest) { apply(); } else { loadManifest().then(apply); }
+  }
+  if (e.data && e.data.type === 'GET_PROGRESS') {
+    var pr = { type: 'PROGRESS', received: progress.received, total: progress.total };
+    if (e.ports && e.ports[0]) e.ports[0].postMessage(pr);
   }
 });
 
-// Ensure password is available, restoring from IndexedDB if needed
+// Ensure password is available, restoring from IndexedDB if needed, and the
+// manifest is loaded (progress accounting depends on it, so requests must not
+// be served before it is ready).
 function ensurePassword() {
-  if (password) return Promise.resolve(password);
-  return loadPassword().then(function(pwd) {
-    if (pwd) password = pwd;
-    return pwd;
-  }).catch(function() {
-    return null;
+  var pwdPromise;
+  if (password) {
+    pwdPromise = Promise.resolve(password);
+  } else {
+    pwdPromise = loadPassword().then(function(pwd) {
+      if (pwd) password = pwd;
+      return pwd;
+    }).catch(function() {
+      return null;
+    });
+  }
+  var manifestPromise = manifest ? Promise.resolve(manifest) : loadManifest();
+  return Promise.all([pwdPromise, manifestPromise]).then(function(r) {
+    return r[0];
   });
 }
 
@@ -196,8 +312,8 @@ self.addEventListener('fetch', function(e) {
     relPath = path.slice(scopePath.length);
   }
 
-  // Don't intercept: sw.js, login page (index.html at root), _verify.enc
-  if (relPath === 'sw.js' || relPath === '' || relPath === 'index.html' || relPath === '_verify.enc') {
+  // Don't intercept: sw.js, login page (index.html at root), _verify.enc, _manifest.json
+  if (relPath === 'sw.js' || relPath === '' || relPath === 'index.html' || relPath === '_verify.enc' || relPath === '_manifest.json') {
     return;
   }
 
@@ -213,7 +329,10 @@ self.addEventListener('fetch', function(e) {
 
       return caches.open(CACHE_NAME).then(function(cache) {
         return cache.match(e.request).then(function(cached) {
-          if (cached) return cached;
+          if (cached) {
+            addBytes(relKeyFromUrl(e.request.url), declaredSize(encKey(relKeyFromUrl(e.request.url))));
+            return cached;
+          }
 
           // Try the original URL first (in case it exists unencrypted)
           return fetch(e.request).then(function(response) {
@@ -236,10 +355,10 @@ function fetchAndDecrypt(originalUrl, cache) {
     if (!r.ok) {
       return new Response('Not Found', { status: 404, statusText: 'Not Found' });
     }
-    return r.arrayBuffer();
+    return readWithProgress(r, relKeyFromUrl(encUrl));
   }).then(function(buf) {
     if (buf instanceof Response) return buf;
-    return decryptData(new Uint8Array(buf), password);
+    return decryptData(buf, password);
   }).then(function(plain) {
     if (plain instanceof Response) return plain;
     var contentType = getContentType(originalUrl);
@@ -249,6 +368,9 @@ function fetchAndDecrypt(originalUrl, cache) {
     });
     // Cache the decrypted response
     cache.put(new Request(originalUrl), response.clone());
+    // If the stream was shorter than declared (e.g. cached/range), top up.
+    var key = encKey(relKeyFromUrl(originalUrl));
+    addBytes(key, declaredSize(key) - (counted[key] || 0));
     return response;
   }).catch(function() {
     return new Response('Decryption Failed', { status: 500, statusText: 'Decryption Failed' });

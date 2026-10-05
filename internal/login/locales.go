@@ -14,6 +14,7 @@ type Strings struct {
 	NetworkErrorText    string
 	FooterPrefix        string
 	FooterSuffix        string
+	LoadingLabel        string
 }
 
 var locales = map[string]Strings{
@@ -29,6 +30,7 @@ var locales = map[string]Strings{
 		NetworkErrorText:    "Network error — try again",
 		FooterPrefix:        "Protected with",
 		FooterSuffix:        "Pages",
+		LoadingLabel:        "Loading",
 	},
 	"it": {
 		Lang:                "it",
@@ -42,6 +44,7 @@ var locales = map[string]Strings{
 		NetworkErrorText:    "Errore di rete — riprova",
 		FooterPrefix:        "Protetto con",
 		FooterSuffix:        "Pages",
+		LoadingLabel:        "Caricamento",
 	},
 }
 
