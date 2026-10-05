@@ -154,6 +154,44 @@ func TestLoaderUsesLocaleLoadingLabel(t *testing.T) {
 	}
 }
 
+// The loader substitutes {{LOADING_LABEL}} in three places (title, overlay
+// markup, and the JS var). A partial replace would leave the literal in the
+// visible label, so assert no placeholder survives anywhere.
+func TestLoaderHasNoUnsubstitutedPlaceholders(t *testing.T) {
+	for _, locale := range KnownLocales() {
+		loader := GenerateLoader("test.html.enc", locale)
+		if strings.Contains(loader, "{{") {
+			t.Fatalf("loader (%s) contains an unsubstituted placeholder: %s", locale, loader)
+		}
+		if strings.Contains(loader, "{{ENC_URL}}") || !strings.Contains(loader, "test.html.enc") {
+			t.Fatalf("loader (%s) did not substitute the enc URL", locale)
+		}
+	}
+}
+
+func TestLoaderRendersLocalizedLabelInOverlay(t *testing.T) {
+	it := GenerateLoader("test.html.enc", "it")
+	// The overlay label and the JS var must both carry the localized string.
+	if !strings.Contains(it, `<div id="__cp_lbl__">Caricamento`) {
+		t.Fatal("Italian loader overlay does not render the localized label")
+	}
+	if !strings.Contains(it, "var LOADING_LABEL='Caricamento'") {
+		t.Fatal("Italian loader JS var does not hold the localized label")
+	}
+}
+
+// The login page must report the byte count of the page it actually fetched
+// (encUrl), not a hardcoded key, otherwise ?r=<page> navigation miscounts.
+func TestLoginPageReportsFetchedKey(t *testing.T) {
+	html := GenerateLoginPage("en")
+	if !strings.Contains(html, "reportBytes(encUrl,buf.byteLength)") {
+		t.Fatal("login page must report the fetched encUrl key, not a hardcoded one")
+	}
+	if strings.Contains(html, "reportBytes('index.html.enc'") {
+		t.Fatal("login page must not hardcode index.html.enc when reporting bytes")
+	}
+}
+
 func TestProgressOverlayPresent(t *testing.T) {
 	sources := map[string]string{
 		"template.html": GenerateLoginPage("en"),

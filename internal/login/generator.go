@@ -25,8 +25,8 @@ func GenerateLoginPage(locale string) string {
 // The encURL is the relative path to the .enc file (e.g., "about.html.enc").
 func GenerateLoader(encURL, locale string) string {
 	s := LocaleStrings(locale)
-	out := strings.Replace(loaderTemplateHTML, "{{ENC_URL}}", encURL, 1)
-	out = strings.Replace(out, "{{LOADING_LABEL}}", s.LoadingLabel, 1)
+	out := strings.ReplaceAll(loaderTemplateHTML, "{{ENC_URL}}", encURL)
+	out = strings.ReplaceAll(out, "{{LOADING_LABEL}}", s.LoadingLabel)
 	return out
 }
 

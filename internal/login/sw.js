@@ -21,6 +21,7 @@ var DB_KEY = 'password';
 // the overlay can show "Loading 13.2 MB / 50.1 MB". Capping also prevents a
 // resource fetched twice (e.g. an <img> plus a JS fetch) from double-counting.
 var manifest = null;
+var manifestTried = false; // ensures a missing manifest is not refetched per request
 var counted = {}; // manifest key ("path.ext.enc") -> bytes counted so far
 var progress = { received: 0, total: 0 };
 
@@ -30,6 +31,8 @@ function resetProgress() {
 }
 
 function loadManifest() {
+  if (manifestTried) return Promise.resolve(manifest);
+  manifestTried = true;
   return fetch('_manifest.json').then(function(r) {
     if (!r.ok) throw new Error('no manifest');
     return r.json();
@@ -243,6 +246,7 @@ self.addEventListener('message', function(e) {
     // Clear cached decrypted files when password changes
     caches.delete(CACHE_NAME);
     resetProgress();
+    manifestTried = false;
     loadManifest();
     // Confirm via MessageChannel port if available, else via source
     var reply = { type: 'PASSWORD_SET' };
@@ -330,7 +334,12 @@ self.addEventListener('fetch', function(e) {
       return caches.open(CACHE_NAME).then(function(cache) {
         return cache.match(e.request).then(function(cached) {
           if (cached) {
-            addBytes(relKeyFromUrl(e.request.url), declaredSize(encKey(relKeyFromUrl(e.request.url))));
+            // A cache hit transfers no bytes, but the resource is loaded, so
+            // credit it in full: the overlay label is "Loading", and this lets
+            // a fully-cached revisit reach 100% and dismiss. addBytes caps at
+            // the declared size, so this can never exceed the total.
+            var hitKey = encKey(relKeyFromUrl(e.request.url));
+            addBytes(hitKey, declaredSize(hitKey));
             return cached;
           }
 

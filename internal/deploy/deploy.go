@@ -195,10 +195,7 @@ func runWithUploader(ctx context.Context, files []FileEntry, opts Options, uploa
 			}
 		}
 
-		manifestJSON, err := json.Marshal(struct {
-			Total int64            `json:"total"`
-			Files map[string]int64 `json:"files"`
-		}{Total: manifestTotal, Files: manifestFiles})
+		manifestJSON, err := marshalManifest(manifestTotal, manifestFiles)
 		if err != nil {
 			return nil, fmt.Errorf("marshaling manifest: %w", err)
 		}
@@ -290,6 +287,8 @@ func dryRun(files []FileEntry, opts Options) (*Result, error) {
 		}
 		items = append(items, dryItem{"_verify.enc", len(canary)})
 
+		manifestFiles := make(map[string]int64, len(files))
+		var manifestTotal int64
 		for _, f := range files {
 			data, err := os.ReadFile(f.AbsPath)
 			if err != nil {
@@ -298,18 +297,19 @@ func dryRun(files []FileEntry, opts Options) (*Result, error) {
 			encKey := f.RelPath + ".enc"
 			// Encrypted size = plaintext + HEADER_LEN(33) + GCM tag(16)
 			items = append(items, dryItem{encKey, len(data) + 49})
+			manifestFiles[encKey] = int64(len(data) + 49)
+			manifestTotal += int64(len(data) + 49)
 
 			if isHTMLFile(f.RelPath) && f.RelPath != "index.html" {
 				loader := login.GenerateLoader(encKey, opts.Locale)
 				items = append(items, dryItem{f.RelPath, len(loader)})
 			}
 		}
-		// Manifest size estimate: {"total":N,"files":{"key":size,...}}
-		manifestSize := 24 + len(files)*16
-		for _, f := range files {
-			manifestSize += len(f.RelPath) + 6
+		manifestJSON, err := marshalManifest(manifestTotal, manifestFiles)
+		if err != nil {
+			return nil, fmt.Errorf("marshaling manifest: %w", err)
 		}
-		items = append(items, dryItem{"_manifest.json", manifestSize})
+		items = append(items, dryItem{"_manifest.json", len(manifestJSON)})
 	} else {
 		for _, f := range files {
 			data, err := os.ReadFile(f.AbsPath)
@@ -336,4 +336,13 @@ func dryRun(files []FileEntry, opts Options) (*Result, error) {
 func isHTMLFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	return ext == ".html" || ext == ".htm"
+}
+
+// marshalManifest serializes the progress manifest uploaded as _manifest.json.
+// Shared by the real deploy and the dry run so both report the same size.
+func marshalManifest(total int64, files map[string]int64) ([]byte, error) {
+	return json.Marshal(struct {
+		Total int64            `json:"total"`
+		Files map[string]int64 `json:"files"`
+	}{Total: total, Files: files})
 }

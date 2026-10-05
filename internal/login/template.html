@@ -153,7 +153,7 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
       if(!r.ok)throw new Error('fetch failed');
       return r.arrayBuffer();
     }).then(function(buf){
-      reportBytes('index.html.enc',buf.byteLength);
+      reportBytes(encUrl,buf.byteLength);
       return decryptData(new Uint8Array(buf),pwd);
     }).then(function(plain){
       var html=injectLoadingOverlay(new TextDecoder().decode(plain));
