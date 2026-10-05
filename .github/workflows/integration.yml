@@ -43,10 +43,12 @@ jobs:
 
       - name: Create test bucket
         run: |
-          curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
-          chmod +x /usr/local/bin/mc
-          mc alias set local http://localhost:9000 minioadmin minioadmin
-          mc mb local/pages-test
+          # dl.min.io no longer serves the mc client; use the AWS CLI, which is
+          # preinstalled on the runner and used by the rest of the workflow.
+          AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin \
+            aws s3api create-bucket \
+              --bucket pages-test \
+              --endpoint-url http://localhost:9000
 
       - name: Run integration tests
         env:
