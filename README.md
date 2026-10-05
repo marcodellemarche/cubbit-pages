@@ -270,14 +270,16 @@ When deploying with `--encrypt`:
 2. A login `index.html` is auto-generated
 3. The user's original `index.html` becomes `index.html.enc`
 4. A `_verify.enc` canary file validates the password
-5. A **service worker** (`sw.js`) is uploaded alongside the login page:
+5. A `_manifest.json` file lists every encrypted asset and its size, plus the total — used to show download progress
+6. A **service worker** (`sw.js`) is uploaded alongside the login page:
    - After login, the SW is registered and receives the password via `postMessage`
    - It intercepts every browser fetch (scripts, stylesheets, images, fonts, etc.)
    - For each request: if the original resource returns 404, it tries `<url>.enc`, decrypts in-memory, and returns the plaintext with the correct `Content-Type`
+   - The encrypted body is read as a stream and each chunk is credited to the progress counter as it arrives
    - Decrypted responses are cached for performance
    - Password is persisted to IndexedDB so it survives service worker restarts without requiring re-login
-6. For each HTML file, a "loader" page handles direct navigation (e.g., bookmark to `/about.html`)
-7. A dark loading overlay (Cubbit colors + spinner) is injected into every decrypted page before `document.write` and dissolves on `window.load`, eliminating the white flash while external CSS is being fetched and decrypted
+7. For each HTML file, a "loader" page handles direct navigation (e.g., bookmark to `/about.html`)
+8. A dark loading overlay (Cubbit colors + spinner) is injected into every decrypted page before `document.write` and dissolves on `window.load`, eliminating the white flash while external CSS is being fetched and decrypted. The overlay also shows a progress bar and `Loading 13.2 MB / 50.1 MB` by polling the service worker (`GET_PROGRESS`), which reports bytes downloaded and decrypted against the manifest total.
 
 This means **multi-file sites work out of the box** — SPAs (Vite, React, etc.), sites with separate JS/CSS/images, all work transparently after login.
 

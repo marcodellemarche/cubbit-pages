@@ -77,6 +77,7 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
   var ITERATIONS=100000;
   var STORAGE_KEY='cubbitseal_password';
   var VERIFY_FILE='_verify.enc';
+  var LOADING_LABEL='{{.LoadingLabel}}';
 
   // --- Function definitions (before any calls) ---
 
@@ -111,14 +112,38 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
     }
   }
 
+  // Build a self-contained overlay that polls the service worker for
+  // download/decrypt progress. It must be self-contained because after
+  // document.write() the current script is discarded, but Window timers survive.
+  function buildOverlay(label){
+    var style='<style id="__cp_ovl_s__">#__cp_ovl__{position:fixed;inset:0;z-index:99999;background:#0a0e17;display:flex;align-items:center;justify-content:center;transition:opacity .3s}#__cp_box__{display:flex;flex-direction:column;align-items:center;gap:1rem;width:min(280px,70vw)}#__cp_spin__{width:32px;height:32px;border:3px solid rgba(0,158,255,.2);border-top-color:#009EFF;border-radius:50%;animation:__cp_r__ .6s linear infinite}@keyframes __cp_r__{to{transform:rotate(360deg)}}#__cp_bar_w__{width:100%;height:6px;background:rgba(0,158,255,.15);border-radius:3px;overflow:hidden}#__cp_bar__{height:100%;width:0;background:#009EFF;border-radius:3px;transition:width .2s}#__cp_lbl__{font-size:.8rem;color:#9ca3af;font-variant-numeric:tabular-nums}</style>';
+    var div='<div id="__cp_ovl__"><div id="__cp_box__"><div id="__cp_spin__"></div><div id="__cp_bar_w__"><div id="__cp_bar__"></div></div><div id="__cp_lbl__">'+label+'…</div></div></div>';
+    var script='<script>(function(){'+
+      'var LABEL='+JSON.stringify(label)+';'+
+      'function fmt(n){if(n<1024)return n+" B";var u=["KB","MB","GB","TB"],i=-1;do{n/=1024;i++;}while(n>=1024&&i<u.length-1);return n.toFixed(1)+" "+u[i];}'+
+      'function poll(){var sw=navigator.serviceWorker&&navigator.serviceWorker.controller;if(!sw)return;var ch=new MessageChannel();'+
+        'ch.port1.onmessage=function(ev){if(!ev.data||ev.data.type!=="PROGRESS")return;var r=ev.data.received,t=ev.data.total;'+
+          'var b=document.getElementById("__cp_bar__"),l=document.getElementById("__cp_lbl__");if(!b||!l)return;'+
+          'if(t>0){b.style.width=Math.min(100,Math.round(r/t*100))+"%";l.textContent=LABEL+" "+fmt(r)+" / "+fmt(t);}};'+
+        'sw.postMessage({type:"GET_PROGRESS"},[ch.port2]);}'+
+      'var timer=setInterval(poll,300);poll();'+
+      'function rm(){if(timer){clearInterval(timer);timer=null;}var o=document.getElementById("__cp_ovl__");if(o){o.style.opacity="0";setTimeout(function(){o.parentNode&&o.parentNode.removeChild(o);},300);}}'+
+      'if(document.readyState==="complete"){rm();}else{window.addEventListener("load",rm);}'+
+    '})();<\/script>';
+    return {style:style,div:div,script:script};
+  }
+
   function injectLoadingOverlay(html){
-    var style='<style id="__cp_ovl_s__">#__cp_ovl__{position:fixed;inset:0;z-index:99999;background:#0a0e17;display:flex;align-items:center;justify-content:center;transition:opacity .3s}#__cp_spin__{width:32px;height:32px;border:3px solid rgba(0,158,255,.2);border-top-color:#009EFF;border-radius:50%;animation:__cp_r__ .6s linear infinite}@keyframes __cp_r__{to{transform:rotate(360deg)}}</style>';
-    var div='<div id="__cp_ovl__"><div id="__cp_spin__"></div></div>';
-    var rm='<script>(function(){function r(){var o=document.getElementById("__cp_ovl__");if(o){o.style.opacity="0";setTimeout(function(){o.parentNode&&o.parentNode.removeChild(o);},300);}}if(document.readyState==="complete"){r();}else{window.addEventListener("load",r);}})();<\/script>';
-    html=html.replace(/(<head[^>]*>)/i,function(m){return m+style;});
-    html=html.replace(/(<body[^>]*>)/i,function(m){return m+div;});
-    html=html.replace(/<\/body>/i,rm+'</body>');
+    var o=buildOverlay(LOADING_LABEL);
+    html=html.replace(/(<head[^>]*>)/i,function(m){return m+o.style;});
+    html=html.replace(/(<body[^>]*>)/i,function(m){return m+o.div;});
+    html=html.replace(/<\/body>/i,o.script+'</body>');
     return html;
+  }
+
+  function reportBytes(key,n){
+    var sw=navigator.serviceWorker&&navigator.serviceWorker.controller;
+    if(sw)sw.postMessage({type:'ADD_BYTES',key:key,bytes:n});
   }
 
   function loadEncryptedPage(encUrl){
@@ -128,6 +153,7 @@ body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xm
       if(!r.ok)throw new Error('fetch failed');
       return r.arrayBuffer();
     }).then(function(buf){
+      reportBytes(encUrl,buf.byteLength);
       return decryptData(new Uint8Array(buf),pwd);
     }).then(function(plain){
       var html=injectLoadingOverlay(new TextDecoder().decode(plain));

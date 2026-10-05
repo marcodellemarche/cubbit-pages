@@ -23,8 +23,11 @@ func GenerateLoginPage(locale string) string {
 
 // GenerateLoader returns a loader HTML page that fetches and decrypts an encrypted file.
 // The encURL is the relative path to the .enc file (e.g., "about.html.enc").
-func GenerateLoader(encURL string) string {
-	return strings.Replace(loaderTemplateHTML, "{{ENC_URL}}", encURL, 1)
+func GenerateLoader(encURL, locale string) string {
+	s := LocaleStrings(locale)
+	out := strings.ReplaceAll(loaderTemplateHTML, "{{ENC_URL}}", encURL)
+	out = strings.ReplaceAll(out, "{{LOADING_LABEL}}", s.LoadingLabel)
+	return out
 }
 
 // GenerateServiceWorker returns the service worker JavaScript source.

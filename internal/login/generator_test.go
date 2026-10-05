@@ -59,21 +59,21 @@ func TestGenerateLoginPageIsValidHTML(t *testing.T) {
 // --- Loader tests ---
 
 func TestGenerateLoaderContainsEncURL(t *testing.T) {
-	loader := GenerateLoader("about.html.enc")
+	loader := GenerateLoader("about.html.enc", "en")
 	if !strings.Contains(loader, "about.html.enc") {
 		t.Fatal("loader missing enc URL")
 	}
 }
 
 func TestGenerateLoaderContainsRedirect(t *testing.T) {
-	loader := GenerateLoader("page.html.enc")
+	loader := GenerateLoader("page.html.enc", "en")
 	if !strings.Contains(loader, "index.html") {
 		t.Fatal("loader missing redirect to index.html")
 	}
 }
 
 func TestGenerateLoaderContainsDecryptionLogic(t *testing.T) {
-	loader := GenerateLoader("test.html.enc")
+	loader := GenerateLoader("test.html.enc", "en")
 	if !strings.Contains(loader, "crypto.subtle") {
 		t.Fatal("loader missing Web Crypto API")
 	}
@@ -134,12 +134,91 @@ func TestGenerateLoginPageContainsServiceWorkerRegistration(t *testing.T) {
 }
 
 func TestGenerateLoaderContainsServiceWorkerRegistration(t *testing.T) {
-	loader := GenerateLoader("test.html.enc")
+	loader := GenerateLoader("test.html.enc", "en")
 	if !strings.Contains(loader, "serviceWorker") {
 		t.Fatal("loader missing service worker registration")
 	}
 	if !strings.Contains(loader, "ensureServiceWorker") {
 		t.Fatal("loader missing ensureServiceWorker function")
+	}
+}
+
+func TestLoaderUsesLocaleLoadingLabel(t *testing.T) {
+	en := GenerateLoader("test.html.enc", "en")
+	it := GenerateLoader("test.html.enc", "it")
+	if !strings.Contains(en, "Loading") {
+		t.Fatal("English loader missing 'Loading' label")
+	}
+	if !strings.Contains(it, "Caricamento") {
+		t.Fatal("Italian loader missing 'Caricamento' label")
+	}
+}
+
+// The loader substitutes {{LOADING_LABEL}} in three places (title, overlay
+// markup, and the JS var). A partial replace would leave the literal in the
+// visible label, so assert no placeholder survives anywhere.
+func TestLoaderHasNoUnsubstitutedPlaceholders(t *testing.T) {
+	for _, locale := range KnownLocales() {
+		loader := GenerateLoader("test.html.enc", locale)
+		if strings.Contains(loader, "{{") {
+			t.Fatalf("loader (%s) contains an unsubstituted placeholder: %s", locale, loader)
+		}
+		if strings.Contains(loader, "{{ENC_URL}}") || !strings.Contains(loader, "test.html.enc") {
+			t.Fatalf("loader (%s) did not substitute the enc URL", locale)
+		}
+	}
+}
+
+func TestLoaderRendersLocalizedLabelInOverlay(t *testing.T) {
+	it := GenerateLoader("test.html.enc", "it")
+	// The overlay label and the JS var must both carry the localized string.
+	if !strings.Contains(it, `<div id="__cp_lbl__">Caricamento`) {
+		t.Fatal("Italian loader overlay does not render the localized label")
+	}
+	if !strings.Contains(it, "var LOADING_LABEL='Caricamento'") {
+		t.Fatal("Italian loader JS var does not hold the localized label")
+	}
+}
+
+// The login page must report the byte count of the page it actually fetched
+// (encUrl), not a hardcoded key, otherwise ?r=<page> navigation miscounts.
+func TestLoginPageReportsFetchedKey(t *testing.T) {
+	html := GenerateLoginPage("en")
+	if !strings.Contains(html, "reportBytes(encUrl,buf.byteLength)") {
+		t.Fatal("login page must report the fetched encUrl key, not a hardcoded one")
+	}
+	if strings.Contains(html, "reportBytes('index.html.enc'") {
+		t.Fatal("login page must not hardcode index.html.enc when reporting bytes")
+	}
+}
+
+func TestProgressOverlayPresent(t *testing.T) {
+	sources := map[string]string{
+		"template.html": GenerateLoginPage("en"),
+		"loader.html":   GenerateLoader("test.html.enc", "en"),
+	}
+	for name, src := range sources {
+		for _, want := range []string{"GET_PROGRESS", "PROGRESS", "__cp_bar__", "__cp_lbl__"} {
+			if !strings.Contains(src, want) {
+				t.Fatalf("%s missing progress overlay element %q", name, want)
+			}
+		}
+	}
+}
+
+func TestServiceWorkerProgressSupport(t *testing.T) {
+	js := GenerateServiceWorker()
+	for _, want := range []string{"_manifest.json", "GET_PROGRESS", "PROGRESS", "ADD_BYTES", "loadManifest", "addBytes", "readWithProgress"} {
+		if !strings.Contains(js, want) {
+			t.Fatalf("service worker missing progress support %q", want)
+		}
+	}
+}
+
+func TestServiceWorkerExcludesManifest(t *testing.T) {
+	js := GenerateServiceWorker()
+	if !strings.Contains(js, "'_manifest.json'") {
+		t.Fatal("service worker must not intercept _manifest.json")
 	}
 }
 
@@ -157,7 +236,7 @@ func extractJSVar(source, varName string) (int, bool) {
 		return 0, false
 	}
 	var val int
-				_, _ = fmt.Sscanf(m[1], "%d", &val)
+	_, _ = fmt.Sscanf(m[1], "%d", &val)
 	return val, true
 }
 
@@ -194,9 +273,9 @@ func TestCryptoConstantsConsistency(t *testing.T) {
 
 	// Check each JS source that contains crypto constants
 	sources := map[string]string{
-		"sw.js":          GenerateServiceWorker(),
-		"template.html":  GenerateLoginPage("en"),
-		"loader.html":    GenerateLoader("test.html.enc"),
+		"sw.js":         GenerateServiceWorker(),
+		"template.html": GenerateLoginPage("en"),
+		"loader.html":   GenerateLoader("test.html.enc", "en"),
 	}
 
 	for name, src := range sources {
@@ -300,7 +379,7 @@ func TestLoginPageSWRegistrationBeforeLoad(t *testing.T) {
 // --- Critical: loader registers SW before fetching ---
 
 func TestLoaderSWRegistrationBeforeFetch(t *testing.T) {
-	loader := GenerateLoader("about.html.enc")
+	loader := GenerateLoader("about.html.enc", "en")
 	if !strings.Contains(loader, "ensureServiceWorker(pwd).then(") {
 		t.Fatal("loader must call ensureServiceWorker before fetching content")
 	}
@@ -316,7 +395,7 @@ func TestLoginPageRegistersCorrectSWFile(t *testing.T) {
 }
 
 func TestLoaderRegistersCorrectSWFile(t *testing.T) {
-	loader := GenerateLoader("test.html.enc")
+	loader := GenerateLoader("test.html.enc", "en")
 	if !strings.Contains(loader, "register('sw.js')") {
 		t.Fatal("loader must register 'sw.js' as service worker")
 	}
@@ -361,7 +440,7 @@ func TestLoginPageSendsClearPasswordOnLogout(t *testing.T) {
 }
 
 func TestLoaderSendsClearPasswordOnLogout(t *testing.T) {
-	loader := GenerateLoader("test.html.enc")
+	loader := GenerateLoader("test.html.enc", "en")
 	if !strings.Contains(loader, "CLEAR_PASSWORD") {
 		t.Fatal("loader must send CLEAR_PASSWORD to SW when clearing sessionStorage")
 	}
@@ -377,8 +456,8 @@ func TestServiceWorkerFetchAndDecryptPattern(t *testing.T) {
 		t.Fatal("service worker must try originalUrl + '.enc' for encrypted files")
 	}
 
-	// Must call decryptData on the fetched .enc content
-	if !strings.Contains(js, "decryptData(new Uint8Array(buf), password)") {
+	// Must call decryptData on the fetched .enc content with the stored password
+	if !strings.Contains(js, "decryptData(buf, password)") {
 		t.Fatal("service worker must decrypt .enc content with stored password")
 	}
 

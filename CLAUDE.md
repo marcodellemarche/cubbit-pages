@@ -9,6 +9,7 @@ CLI Go per deploy di siti statici su Cubbit S3, con cifratura opzionale AES-256-
 - Pagina di login generata automaticamente e iniettata come index.html
 - Password memorizzata in sessionStorage lato browser (login/loader page); il service worker usa IndexedDB (scope SW, non accessibile agli script di pagina)
 - Service worker (`sw.js`) intercetta i fetch e decripta .enc al volo per siti multi-file
+- `_manifest.json` (solo deploy cifrati) elenca gli asset `.enc` con le dimensioni + totale: il SW lo usa per riportare il progresso (`GET_PROGRESS`) all'overlay, che mostra barra + `Caricamento 13,2 MB / 50,1 MB`
 
 ## Comandi
 - `make build` — build per la piattaforma corrente
@@ -101,10 +102,10 @@ cubbit-pages snippets --bucket mio-bucket
 
 ## File chiave
 - `internal/crypto/crypto.go` — logica AES-256-GCM
-- `internal/deploy/deploy.go` — orchestrazione deploy; `formatSize()`, `cleanStale()`, `dryRun()`; `Options.{Version,Clean}` e `Result.{FilesRemoved,RemovedFiles}`
+- `internal/deploy/deploy.go` — orchestrazione deploy; `formatSize()`, `cleanStale()`, `dryRun()`; `Options.{Version,Clean}` e `Result.{FilesRemoved,RemovedFiles}`; genera `_manifest.json` (mappa file `.enc` → dimensione + totale) per il progresso di download
 - `internal/login/generator.go` — generazione pagina di login e service worker (usa `html/template`)
 - `internal/login/locales.go` — struct `Strings`, map `locales` (en/it), `KnownLocales()`, `LocaleStrings()`, `IsKnownLocale()`
-- `internal/login/sw.js` — service worker per decryption trasparente di asset .enc
+- `internal/login/sw.js` — service worker per decryption trasparente di asset .enc; streaming dei body `.enc` con contabilizzazione progresso (`addBytes`, `readWithProgress`), risponde a `GET_PROGRESS`/`ADD_BYTES`
 - `internal/s3/upload.go` — upload con gestione ACL; `DeployMeta` struct; metadata S3 iniettati su `index.html`
 - `internal/s3/client.go` — client S3, `ListObjects` (paginato), `DeleteObjects` (batch 1000), `HeadBucket`; `DiscoverDeploys()` per status --deep; `BuildSiteURL()`
 - `internal/config/config.go` — `Resolve()`, `ResolveOpen()`, `Validate()`, `SiteURL()`; `Config.Profile`, `Config.Clean`, `Config.Region`; helper `resolveProfileName()`
