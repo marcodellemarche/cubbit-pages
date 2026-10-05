@@ -25,19 +25,21 @@ jobs:
 
       - name: Start MinIO
         run: |
-          docker run -d \
-            --name minio \
-            -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio server /data
+          # MinIO community is source-only since 2025: the Docker Hub image and the
+          # dl.min.io binaries were removed. Build the server from source.
+          go install github.com/minio/minio@latest
+          "$(go env GOPATH)/bin/minio" server /tmp/minio-data --address :9000 >/tmp/minio.log 2>&1 &
 
           # Wait for MinIO to be ready
-          for i in $(seq 1 20); do
+          for i in $(seq 1 30); do
             curl -sf http://localhost:9000/minio/health/live && break
             echo "Waiting for MinIO... ($i)"
             sleep 2
           done
+          curl -sf http://localhost:9000/minio/health/live || { cat /tmp/minio.log; exit 1; }
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
 
       - name: Create test bucket
         run: |
